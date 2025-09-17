@@ -1,0 +1,6 @@
+[package]
+name = "elf2flash-core"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]

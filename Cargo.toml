@@ -1,0 +1,11 @@
+[workspace]
+resolver = "3"
+
+members = ["crates/*"]
+default-members = ["crates/elf2flash"]
+
+[workspace.package]
+version = "1.0.0"
+edition = "2024"
+
+[workspace.dependencies]

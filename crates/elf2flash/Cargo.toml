@@ -1,0 +1,7 @@
+[package]
+name = "elf2flash"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+elf2flash-core = { path = "../elf2flash-core" }
