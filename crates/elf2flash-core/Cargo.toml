@@ -2,5 +2,10 @@
 name = "elf2flash-core"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
 
 [dependencies]
+assert_into = "1.1"
+static_assertions = "1"
+zerocopy = { version = "0.8", features = ["derive"] }
+log = { workspace = true }

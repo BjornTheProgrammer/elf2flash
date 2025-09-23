@@ -5,7 +5,9 @@ members = ["crates/*"]
 default-members = ["crates/elf2flash"]
 
 [workspace.package]
-version = "1.0.0"
+version = "0.0.1"
 edition = "2024"
+license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
+log = "0.4"

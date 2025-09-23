@@ -2,6 +2,18 @@
 name = "elf2flash"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
 
 [dependencies]
 elf2flash-core = { path = "../elf2flash-core" }
+clap = { version = "4", features = ["derive"] }
+pbr = "1"
+serialport = { version = "4", optional = true }
+ctrlc = "3.4"
+sysinfo = "0.32"
+log = { workspace = true }
+env_logger = "0.11"
+
+[features]
+default = ["serial"]
+serial = ["serialport"]
