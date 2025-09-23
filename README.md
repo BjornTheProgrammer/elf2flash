@@ -16,7 +16,7 @@ Options:
   -v, --verbose          Verbose
   -d, --deploy           Deploy to any connected pico
   -s, --serial           Connect to serial after deploy
-  -t, --term             Send termination message to the device on ctrl+c
+  -t, --term             Send termination message (b"elf2flash-term\r\n") to the device on ctrl+c
   -f, --family <FAMILY>  Select family ID for UF2. See https://github.com/microsoft/uf2/blob/master/utils/uf2families.json for list
   -h, --help             Print help
   -V, --version          Print version

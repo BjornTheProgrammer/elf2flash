@@ -22,7 +22,7 @@ struct Opts {
     #[clap(short, long)]
     serial: bool,
 
-    /// Send termination message to the device on ctrl+c
+    /// Send termination message (b"elf2flash-term\r\n") to the device on ctrl+c
     #[cfg(feature = "serial")]
     #[clap(short, long)]
     term: bool,
@@ -185,7 +185,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                         let port = port.clone();
                         move || {
                             let mut port = port.lock().unwrap();
-                            port.write_all(b"elf2uf2-term\r\n").ok();
+                            port.write_all(b"elf2flash-term\r\n").ok();
                             port.flush().ok();
                             process::exit(0);
                         }
