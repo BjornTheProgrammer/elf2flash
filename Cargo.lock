@@ -212,7 +212,7 @@ checksum = "48c757948c5ede0e46177b7add2e67155f70e33c07fea8284df6576da70b3719"
 
 [[package]]
 name = "elf2flash"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "clap",
  "ctrlc",
@@ -226,7 +226,7 @@ dependencies = [
 
 [[package]]
 name = "elf2flash-core"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "assert_into",
  "log",

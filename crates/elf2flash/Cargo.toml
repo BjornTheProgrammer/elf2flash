@@ -11,7 +11,7 @@ keywords = ["rp2040", "pico", "elf2uf2", "elf2uf2-rs", "rp2350"]
 documentation = "https://docs.rs/elf2flash"
 
 [dependencies]
-elf2flash-core = { version="0.0.1", path = "../elf2flash-core" }
+elf2flash-core = { version = "0.0.2", path = "../elf2flash-core" }
 clap = { version = "4", features = ["derive"] }
 pbr = "1"
 serialport = { version = "4", optional = true }
