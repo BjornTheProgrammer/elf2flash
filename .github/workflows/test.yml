@@ -1,0 +1,25 @@
+name: test
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: Build elf2flash
+      run: cargo build -p elf2flash --verbose
+    - name: Test elf2flash
+      run: cargo test -p elf2flash --verbose
+
+    - name: Build elf2flash-core
+      run: cargo build -p elf2flash-core --verbose
+    - name: Test elf2flash-core
+      run: cargo test -p elf2flash-core --verbose
