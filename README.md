@@ -23,7 +23,7 @@ Options:
 ```
 
 ## Why this project instead of elf2uf2?
-This project fixes some issues of elf2uf2-rs ([#36](https://github.com/JoNil/elf2uf2-rs/pull/36), [#38](https://github.com/JoNil/elf2uf2-rs/issues/38), [#40](https://github.com/JoNil/elf2uf2-rs/issues/40), [#41](https://github.com/JoNil/elf2uf2-rs/pull/41), [#42](https://github.com/JoNil/elf2uf2-rs/pull/42)), provides a library for programmatic use (`elf2flash-core`), and .
+This project fixes some issues of elf2uf2-rs ([#36](https://github.com/JoNil/elf2uf2-rs/pull/36), [#38](https://github.com/JoNil/elf2uf2-rs/issues/38), [#40](https://github.com/JoNil/elf2uf2-rs/issues/40), [#41](https://github.com/JoNil/elf2uf2-rs/pull/41), [#42](https://github.com/JoNil/elf2uf2-rs/pull/42)), provides a library for programmatic use (`elf2flash-core`), and supports different family id's for uf2.
 
 ## Credits
 A large amount of thanks for `JoNil`, amazing library [elf2uf2](https://github.com/JoNil/elf2uf2-rs), which this project largely shares codebases.
