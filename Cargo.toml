@@ -8,6 +8,7 @@ default-members = ["crates/elf2flash"]
 version = "0.0.1"
 edition = "2024"
 license = "MIT OR Apache-2.0"
+readme = "README.md"
 
 [workspace.dependencies]
 log = "0.4"

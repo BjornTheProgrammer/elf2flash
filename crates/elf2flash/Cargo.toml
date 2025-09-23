@@ -3,6 +3,12 @@ name = "elf2flash"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+readme.workspace = true
+repository = "https://github.com/BjornTheProgrammer/elf2flash/tree/main/crates/elf2flash"
+categories = ["command-line-utilities", "embedded"]
+description = "A tool to help flash elf2 files to the pico"
+keywords = ["rp2040", "pico", "elf2uf2", "elf2uf2-rs", "rp2350"]
+documentation = "https://docs.rs/elf2flash"
 
 [dependencies]
 elf2flash-core = { path = "../elf2flash-core" }

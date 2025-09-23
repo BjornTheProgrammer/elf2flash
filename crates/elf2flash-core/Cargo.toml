@@ -3,6 +3,12 @@ name = "elf2flash-core"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+readme.workspace = true
+repository = "https://github.com/BjornTheProgrammer/elf2flash/tree/main/crates/elf2flash-core"
+categories = ["embedded"]
+description = "The core library behind `elf2flash`, helps convert elf files to uf2 files"
+keywords = ["rp2040", "pico", "elf2uf2", "elf2uf2-rs", "elf2flash"]
+documentation = "https://docs.rs/elf2flash-core"
 
 [dependencies]
 assert_into = "1.1"
