@@ -30,7 +30,10 @@ impl ProgressReporter for NoProgress {
 /// # Examples
 ///
 /// ```
-/// let bytes_in = io::Cursor::new(&include_bytes!("../tests/rp2040/hello_usb.elf")[..]);
+/// use std::io::Cursor;
+/// use elf2flash_core::{elf2uf2, NoProgress};
+///
+/// let bytes_in = std::io::Cursor::new(&include_bytes!("../tests/rp2040/hello_usb.elf")[..]);
 /// let mut bytes_out = Vec::new();
 /// elf2uf2(bytes_in, &mut bytes_out, None, NoProgress).unwrap();
 /// ```
@@ -197,6 +200,6 @@ mod tests {
         let mut bytes_out = Vec::new();
         elf2uf2(bytes_in, &mut bytes_out, None, NoProgress).unwrap();
 
-        assert_eq!(bytes_out, include_bytes!("../tests/rp2040/hello_usb.uf2"));
+        assert_eq!(bytes_out, include_bytes!("../tests/rp2040/hello_serial.uf2"));
     }
 }
