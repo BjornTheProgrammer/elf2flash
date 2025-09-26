@@ -1,8 +1,8 @@
-use crate::boards::{rp2040::RP2040, rp2350::RP2350};
+use crate::boards::{circuit_playground_bluefruit::CircuitPlaygroundBluefruit, rp2040::RP2040, rp2350::RP2350};
 
 pub mod rp2040;
 pub mod rp2350;
-
+pub mod circuit_playground_bluefruit;
 
 pub struct BoardIter {
     inner: std::vec::IntoIter<Box<dyn BoardInfo>>,
@@ -14,6 +14,7 @@ impl BoardIter {
             inner: vec![
                 Box::new(RP2040::default()) as Box<dyn BoardInfo>,
                 Box::new(RP2350::default()),
+                Box::new(CircuitPlaygroundBluefruit::default()),
             ]
             .into_iter(),
         }

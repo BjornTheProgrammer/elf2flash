@@ -10,6 +10,7 @@ use crate::{address_range::{FLASH_SECTOR_ERASE_SIZE, MAIN_RAM_END, MAIN_RAM_STAR
 pub mod address_range;
 pub mod elf;
 pub mod uf2;
+pub mod boards;
 
 pub trait ProgressReporter {
     fn start(&mut self, total_bytes: usize);
