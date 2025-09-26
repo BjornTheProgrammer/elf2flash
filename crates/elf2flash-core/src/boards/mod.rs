@@ -1,14 +1,18 @@
-use crate::boards::{circuit_playground_bluefruit::CircuitPlaygroundBluefruit, rp2040::RP2040, rp2350::RP2350};
+mod rp2040;
+mod rp2350;
+mod circuit_playground_bluefruit;
 
-pub mod rp2040;
-pub mod rp2350;
-pub mod circuit_playground_bluefruit;
+pub use rp2040::RP2040;
+pub use rp2350::RP2350;
+pub use circuit_playground_bluefruit::CircuitPlaygroundBluefruit;
 
+/// This is a helper struct, which allows you to iterate over every board defined
 pub struct BoardIter {
     inner: std::vec::IntoIter<Box<dyn BoardInfo>>,
 }
 
 impl BoardIter {
+    /// Creates a new BoardIter
     pub fn new() -> Self {
         Self {
             inner: vec![
@@ -28,12 +32,13 @@ impl Iterator for BoardIter {
     }
 }
 
-// define_boards!(RP2040, RP2350);
-
+/// This is the version of the firmware on the usb device
 #[allow(unused)]
 #[derive(Debug, Clone)]
 pub struct UsbVersion(pub u8, pub u8, pub u8);
 
+/// This is the usb device information from the usb device. It is possible to generate this information with something like
+/// rusb
 #[allow(unused)]
 #[derive(Debug, Clone)]
 pub struct UsbDevice {
@@ -44,6 +49,7 @@ pub struct UsbDevice {
     pub version: UsbVersion,
 }
 
+/// This trait helps by allowing for definitions of multiple different boards.
 pub trait BoardInfo {
     /// Check if the board is connected to the specified UsbDevice
     fn is_device_board(&self, device: &UsbDevice) -> bool;
@@ -57,7 +63,10 @@ pub trait BoardInfo {
     }
 
     /// Optional, with a default erase size of 4096, this can be calculated by using
-    fn flash_sector_erase_size(&self) -> u32 {
+    fn flash_sector_erase_size(&self) -> u64 {
         4096
     }
+
+    /// Get the board's name
+    fn board_name(&self) -> &'static str;
 }

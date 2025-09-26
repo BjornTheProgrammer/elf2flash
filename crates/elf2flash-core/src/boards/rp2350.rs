@@ -16,4 +16,8 @@ impl BoardInfo for RP2350 {
         // This is the rp2350 arm secure family id, should technically always be true if you held the bootsel button down and cycled power.
         0xe48bff59
     }
+
+    fn board_name(&self) -> &'static str {
+        "RP2350"
+    }
 }

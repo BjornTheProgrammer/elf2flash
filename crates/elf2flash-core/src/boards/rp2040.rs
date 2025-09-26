@@ -15,4 +15,8 @@ impl BoardInfo for RP2040 {
     fn family_id(&self) -> u32 {
         0xe48bff56
     }
+
+    fn board_name(&self) -> &'static str {
+        "RP2040"
+    }
 }

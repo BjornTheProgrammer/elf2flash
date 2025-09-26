@@ -1,5 +1,6 @@
 use crate::boards::{BoardInfo, UsbDevice};
 
+/// This is the Circuit Playfround Bluefruit board
 #[derive(Debug, Default, Clone)]
 pub struct CircuitPlaygroundBluefruit;
 
@@ -15,5 +16,9 @@ impl BoardInfo for CircuitPlaygroundBluefruit {
 
     fn family_id(&self) -> u32 {
         0xada52840
+    }
+
+    fn board_name(&self) -> &'static str {
+        "CircuitPlaygroundBluefruit"
     }
 }
