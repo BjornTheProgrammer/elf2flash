@@ -5,10 +5,12 @@ pub struct RP2040;
 
 impl BoardInfo for RP2040 {
     fn is_device_board(&self, device: &UsbDevice) -> bool {
-        if device.vendor_id != 0x2e8a { return false; }
+        if device.vendor_id != 0x2e8a {
+            return false;
+        }
         match device.product_id {
             0x0003 => true,
-            _ => false
+            _ => false,
         }
     }
 

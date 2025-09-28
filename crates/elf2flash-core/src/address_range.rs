@@ -1,4 +1,4 @@
-use elf::{abi::PT_LOAD, endian::EndianParse, ElfBytes};
+use elf::{ElfBytes, abi::PT_LOAD, endian::EndianParse};
 use thiserror::Error;
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
@@ -43,7 +43,9 @@ pub enum AddressRangesFromElfError {
 pub fn address_ranges_from_elf<E: EndianParse>(
     file: &ElfBytes<'_, E>,
 ) -> Result<Vec<AddressRange>, AddressRangesFromElfError> {
-    let segments = file.segments().ok_or(AddressRangesFromElfError::NoSegments)?;
+    let segments = file
+        .segments()
+        .ok_or(AddressRangesFromElfError::NoSegments)?;
 
     let mut ranges = Vec::new();
 

@@ -1,12 +1,12 @@
-use crate::address_range::{self, address_ranges_from_elf, AddressRange, AddressRangeType};
+use crate::address_range::{self, AddressRange, AddressRangeType, address_ranges_from_elf};
 use assert_into::AssertInto;
-use elf::{abi::PT_LOAD, endian::EndianParse, ElfBytes};
+use elf::{ElfBytes, abi::PT_LOAD, endian::EndianParse};
 use log::debug;
 use std::{
     cmp::min,
     collections::BTreeMap,
     error::Error,
-    io::{Read, Seek, SeekFrom}
+    io::{Read, Seek, SeekFrom},
 };
 
 #[derive(Copy, Clone, Debug, Default)]
@@ -20,12 +20,15 @@ pub fn realize_page(
     input: &mut (impl Read + Seek),
     fragments: &[PageFragment],
     buf: &mut [u8],
-    page_size: u32
+    page_size: u32,
 ) -> Result<(), std::io::Error> {
     assert!(buf.len() >= page_size.assert_into());
 
     for frag in fragments {
-        assert!(frag.page_offset < page_size as u64 && frag.page_offset + frag.bytes <= page_size as u64);
+        assert!(
+            frag.page_offset < page_size as u64
+                && frag.page_offset + frag.bytes <= page_size as u64
+        );
 
         input.seek(SeekFrom::Start(frag.file_offset.assert_into()))?;
 
@@ -37,7 +40,10 @@ pub fn realize_page(
     Ok(())
 }
 
-pub fn get_page_fragments<E: EndianParse>(file: &ElfBytes<E>, page_size: u32) -> BTreeMap<u64, Vec<PageFragment>> {
+pub fn get_page_fragments<E: EndianParse>(
+    file: &ElfBytes<E>,
+    page_size: u32,
+) -> BTreeMap<u64, Vec<PageFragment>> {
     let ranges = address_ranges_from_elf(&file).unwrap();
     for r in &ranges {
         println!("{:?}", r);
@@ -46,11 +52,14 @@ pub fn get_page_fragments<E: EndianParse>(file: &ElfBytes<E>, page_size: u32) ->
     let mut pages = BTreeMap::<u64, Vec<PageFragment>>::new();
 
     for segment in file.segments().expect("Segments should exist in elf") {
-        if segment.p_type == PT_LOAD  && segment.p_memsz > 0 {
+        if segment.p_type == PT_LOAD && segment.p_memsz > 0 {
             let mapped_size = min(segment.p_filesz, segment.p_memsz);
 
             if mapped_size > 0 {
-                let ar = ranges.as_slice().check_address_range(segment.p_paddr, segment.p_vaddr, mapped_size, false).unwrap();
+                let ar = ranges
+                    .as_slice()
+                    .check_address_range(segment.p_paddr, segment.p_vaddr, mapped_size, false)
+                    .unwrap();
 
                 if ar.typ != AddressRangeType::Contents {
                     debug!("ignored");
@@ -89,12 +98,15 @@ pub fn get_page_fragments<E: EndianParse>(file: &ElfBytes<E>, page_size: u32) ->
                 }
                 if segment.p_memsz > segment.p_filesz {
                     // we have some uninitialized data too
-                    ranges.as_slice().check_address_range(
-                        segment.p_paddr + segment.p_filesz,
-                        segment.p_vaddr + segment.p_filesz,
-                        segment.p_memsz - segment.p_filesz,
-                        true,
-                    ).unwrap();
+                    ranges
+                        .as_slice()
+                        .check_address_range(
+                            segment.p_paddr + segment.p_filesz,
+                            segment.p_vaddr + segment.p_filesz,
+                            segment.p_memsz - segment.p_filesz,
+                            true,
+                        )
+                        .unwrap();
                 }
             }
         }
@@ -111,43 +123,43 @@ pub trait AddressRangesExt<'a>: IntoIterator<Item = &'a AddressRange> + Clone {
     }
 
     fn check_address_range(
-            &self,
-            addr: u64,
-            vaddr: u64,
-            size: u64,
-            uninitialized: bool,
-        ) -> Result<AddressRange, Box<dyn Error>> {
-            for range in self.clone().into_iter() {
-                if range.from <= addr && range.to >= addr + size {
-                    if range.typ == address_range::AddressRangeType::NoContents && !uninitialized {
-                        return Err(format!(
-                            "ELF contains memory contents for uninitialized memory at {addr:08x}"
-                        )
-                        .into());
-                    }
-
-                    debug!(
-                        "{} segment {:#08x}->{:#08x} ({:#08x}->{:#08x})",
-                        if uninitialized {
-                            "Uninitialized"
-                        } else {
-                            "Mapped"
-                        },
-                        addr,
-                        addr + size,
-                        vaddr,
-                        vaddr + size
-                    );
-                    return Ok(*range);
+        &self,
+        addr: u64,
+        vaddr: u64,
+        size: u64,
+        uninitialized: bool,
+    ) -> Result<AddressRange, Box<dyn Error>> {
+        for range in self.clone().into_iter() {
+            if range.from <= addr && range.to >= addr + size {
+                if range.typ == address_range::AddressRangeType::NoContents && !uninitialized {
+                    return Err(format!(
+                        "ELF contains memory contents for uninitialized memory at {addr:08x}"
+                    )
+                    .into());
                 }
+
+                debug!(
+                    "{} segment {:#08x}->{:#08x} ({:#08x}->{:#08x})",
+                    if uninitialized {
+                        "Uninitialized"
+                    } else {
+                        "Mapped"
+                    },
+                    addr,
+                    addr + size,
+                    vaddr,
+                    vaddr + size
+                );
+                return Ok(*range);
             }
-            Err(format!(
-                "Memory segment {:#08x}->{:#08x} is outside of valid address range for device",
-                addr,
-                addr + size
-            )
-            .into())
         }
+        Err(format!(
+            "Memory segment {:#08x}->{:#08x} is outside of valid address range for device",
+            addr,
+            addr + size
+        )
+        .into())
+    }
 }
 
 impl<'a, T> AddressRangesExt<'a> for T where T: IntoIterator<Item = &'a AddressRange> + Clone {}

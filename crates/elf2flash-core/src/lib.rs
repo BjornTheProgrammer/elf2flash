@@ -1,17 +1,28 @@
-use std::{collections::HashSet, io::{Cursor, Write}};
+use std::{
+    collections::HashSet,
+    io::{Cursor, Write},
+};
 
+use ::elf::{ElfBytes, ParseError, endian::AnyEndian};
 use assert_into::AssertInto;
-use ::elf::{endian::AnyEndian, ElfBytes, ParseError};
 use log::debug;
 use thiserror::Error;
 use zerocopy::IntoBytes;
 
-use crate::{address_range::AddressRangesFromElfError, boards::BoardInfo, elf::{get_page_fragments, realize_page}, uf2::{Uf2BlockData, Uf2BlockFooter, Uf2BlockHeader, UF2_FLAG_FAMILY_ID_PRESENT, UF2_MAGIC_END, UF2_MAGIC_START0, UF2_MAGIC_START1}};
+use crate::{
+    address_range::AddressRangesFromElfError,
+    boards::BoardInfo,
+    elf::{get_page_fragments, realize_page},
+    uf2::{
+        UF2_FLAG_FAMILY_ID_PRESENT, UF2_MAGIC_END, UF2_MAGIC_START0, UF2_MAGIC_START1,
+        Uf2BlockData, Uf2BlockFooter, Uf2BlockHeader,
+    },
+};
 
 pub mod address_range;
+pub mod boards;
 pub mod elf;
 pub mod uf2;
-pub mod boards;
 
 pub trait ProgressReporter {
     fn start(&mut self, total_bytes: usize);
@@ -53,7 +64,12 @@ pub enum Elf2Uf2Error {
 /// let board = boards::RP2040::default();
 /// elf2uf2(bytes_in, &mut bytes_out, board, NoProgress).unwrap();
 /// ```
-pub fn elf2uf2(input: impl AsRef<[u8]>, mut output: impl Write, board: impl BoardInfo, mut reporter: impl ProgressReporter) -> Result<(), Elf2Uf2Error> {
+pub fn elf2uf2(
+    input: impl AsRef<[u8]>,
+    mut output: impl Write,
+    board: impl BoardInfo,
+    mut reporter: impl ProgressReporter,
+) -> Result<(), Elf2Uf2Error> {
     let input = input.as_ref();
     let file = ElfBytes::<AnyEndian>::minimal_parse(input)?;
 
@@ -72,7 +88,10 @@ pub fn elf2uf2(input: impl AsRef<[u8]>, mut output: impl Write, board: impl Boar
         .map(|addr| addr / flash_sector_erase_size)
         .collect();
 
-    let last_page_addr = *pages.last_key_value().expect("Impossible error occurred since pages is garunteed to have a last page").0;
+    let last_page_addr = *pages
+        .last_key_value()
+        .expect("Impossible error occurred since pages is garunteed to have a last page")
+        .0;
     for sector in touched_sectors {
         let mut page = sector * flash_sector_erase_size;
 
@@ -120,7 +139,12 @@ pub fn elf2uf2(input: impl AsRef<[u8]>, mut output: impl Write, board: impl Boar
 
         block_data.iter_mut().for_each(|v| *v = 0);
 
-        realize_page(&mut Cursor::new(input), &fragments, &mut block_data, page_size)?;
+        realize_page(
+            &mut Cursor::new(input),
+            &fragments,
+            &mut block_data,
+            page_size,
+        )?;
 
         output.write_all(block_header.as_bytes())?;
         output.write_all(block_data.as_bytes())?;
@@ -164,6 +188,9 @@ mod tests {
         let board = boards::RP2040::default();
         elf2uf2(bytes_in, &mut bytes_out, board, NoProgress).unwrap();
 
-        assert_eq!(bytes_out, include_bytes!("../tests/rp2040/hello_serial.uf2"));
+        assert_eq!(
+            bytes_out,
+            include_bytes!("../tests/rp2040/hello_serial.uf2")
+        );
     }
 }

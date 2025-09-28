@@ -12,3 +12,4 @@ readme = "README.md"
 
 [workspace.dependencies]
 log = "0.4"
+thiserror = "2"

@@ -1,10 +1,10 @@
+mod circuit_playground_bluefruit;
 mod rp2040;
 mod rp2350;
-mod circuit_playground_bluefruit;
 
+pub use circuit_playground_bluefruit::CircuitPlaygroundBluefruit;
 pub use rp2040::RP2040;
 pub use rp2350::RP2350;
-pub use circuit_playground_bluefruit::CircuitPlaygroundBluefruit;
 
 /// This is a helper struct, which allows you to iterate over every board defined
 pub struct BoardIter {

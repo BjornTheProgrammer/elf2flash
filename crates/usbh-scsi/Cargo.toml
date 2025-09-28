@@ -1,0 +1,16 @@
+[package]
+name = "usbh-scsi"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+readme = "./README.md"
+repository = "https://github.com/BjornTheProgrammer/elf2flash/tree/main/crates/usbh-scsi"
+categories = ["embedded", "hardware-support"]
+description = "A library to communicate with scsi to usb devices from a host"
+keywords = ["usb", "scsi"]
+documentation = "https://docs.rs/usbh-scsi"
+
+[dependencies]
+log = { workspace = true }
+rusb = { version = "0.9" }
+thiserror = { workspace = true }
