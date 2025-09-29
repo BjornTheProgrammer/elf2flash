@@ -14,7 +14,7 @@ pub struct Cbw {
     pub CBWCB: [u8; 16],
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum Direction {
     In,
     Out,

@@ -1,6 +1,13 @@
 use rusb::{ConfigDescriptor, Device, DeviceHandle, Direction, GlobalContext, TransferType};
 use thiserror::Error;
 
+use crate::{
+    commands::{self, CommandBlock, cbw::Cbw},
+    storage::block_device::UsbBlockDevice,
+};
+
+pub mod block_device;
+
 #[derive(Error, Debug)]
 pub enum UsbMassStorageError {
     #[error("failed to get usb devices from rusb")]
@@ -123,7 +130,7 @@ impl UsbMassStorage<Closed> {
             extra: Opened {
                 handle,
                 bulk_only_transport,
-                timeout_duration: core::time::Duration::from_secs(1),
+                timeout_duration: core::time::Duration::from_secs(10),
             },
         })
     }
@@ -160,7 +167,7 @@ impl UsbMassStorage<Opened> {
 
     /// Reads bytes from the channel up to the point where the buffer is filled. Returns the number of bytes successfully read.
     pub fn read<B: AsMut<[u8]>>(
-        &mut self,
+        &self,
         mut buffer: B,
     ) -> Result<usize, UsbMassStorageReadWriteError> {
         let bulk_only_transport = match self.extra.bulk_only_transport {
@@ -176,6 +183,84 @@ impl UsbMassStorage<Opened> {
         )?;
         Ok(n)
     }
+
+    pub fn execute_command<T: CommandBlock>(
+        &mut self,
+        tag: u32,
+        data_len: u32,
+        direction: commands::cbw::Direction,
+        cmd: &T,
+        data_buf: Option<&mut [u8]>,
+    ) -> Result<(), UsbMassStorageReadWriteError> {
+        // 1. Send CBW
+        let cbw = Cbw::new(tag, data_len, direction, cmd);
+        self.write(cbw.to_bytes())?;
+
+        // 2. Data phase
+        if let Some(buf) = data_buf {
+            match direction {
+                commands::cbw::Direction::In => {
+                    let len = buf.len();
+                    let n = self.read(buf)?;
+                    assert_eq!(n, len);
+                }
+                commands::cbw::Direction::Out => {
+                    self.write(buf)?;
+                }
+            }
+        }
+
+        // 3. Read CSW (13 bytes)
+        let mut csw = [0u8; 13];
+        let n = self.read(&mut csw)?;
+        assert_eq!(n, 13, "short CSW");
+
+        // Optional: parse and check CSW signature, status, and tag matches
+        Ok(())
+    }
+
+    /// Perform the GET_MAX_LUN class-specific request (§3.2 BOT spec).
+    ///
+    /// Returns the maximum Logical Unit Number (LUN).
+    /// - If result is `0`, the device only has LUN0.
+    /// - If the request STALLs, you should assume `0`.
+    pub fn get_max_lun(&mut self) -> Result<u8, UsbMassStorageReadWriteError> {
+        let bulk_only_transport = match self.extra.bulk_only_transport {
+            Some(ref bulk) => bulk,
+            None => return Err(UsbMassStorageReadWriteError::NoKnownTransportationMethod),
+        };
+
+        let bm_request_type = rusb::request_type(
+            rusb::Direction::In,
+            rusb::RequestType::Class,
+            rusb::Recipient::Interface,
+        );
+        let b_request = 0xFE; // GET_MAX_LUN
+        let w_value = 0;
+        let w_index = bulk_only_transport.interface_number as u16;
+        let mut buf = [0u8; 1];
+
+        match self.extra.handle.read_control(
+            bm_request_type,
+            b_request,
+            w_value,
+            w_index,
+            &mut buf,
+            self.extra.timeout_duration,
+        ) {
+            Ok(1) => Ok(buf[0]),
+            Ok(_) => Ok(0), // if unexpected size, fallback to 0
+            Err(rusb::Error::Pipe) => {
+                // Devices with only one LUN often STALL this request → treat as 0
+                Ok(0)
+            }
+            Err(e) => Err(UsbMassStorageReadWriteError::UsbDeviceBulkFailed(e)),
+        }
+    }
+
+    pub fn block_device(self) -> std::io::Result<UsbBlockDevice> {
+        UsbBlockDevice::new(self)
+    }
 }
 
 #[derive(Error, Debug)]
@@ -183,7 +268,7 @@ pub enum UsbMassStorageReadWriteError {
     #[error("there is no defined transportation method")]
     NoKnownTransportationMethod,
     #[error("bulk read error")]
-    UsbDeviceBulkReadFailed(#[from] rusb::Error),
+    UsbDeviceBulkFailed(#[from] rusb::Error),
 }
 
 impl Drop for Opened {
