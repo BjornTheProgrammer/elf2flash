@@ -15,15 +15,16 @@ use crate::storage::{Opened, UsbMassStorage, UsbMassStorageReadWriteError};
 
 // A std-IO-friendly wrapper over your open MSC device.
 // (separate from your FatUsb that implements fatfs traits)
-pub struct UsbBlockDevice {
-    usb: RefCell<UsbMassStorage<Opened>>,
+#[derive(Debug)]
+pub struct UsbBlockDevice<'a> {
+    usb: RefCell<&'a mut UsbMassStorage<Opened>>,
     block_size: u32,
     max_lba: u64,
     pos: u64,
 }
 
-impl UsbBlockDevice {
-    pub fn new(mut usb: UsbMassStorage<Opened>) -> io::Result<Self> {
+impl<'a> UsbBlockDevice<'a> {
+    pub fn new(usb: &'a mut UsbMassStorage<Opened>) -> io::Result<Self> {
         // Query capacity to learn block size & last LBA
         let mut buf = [0u8; 8];
         let rc10 = ReadCapacity10Command::new(0);
@@ -132,7 +133,7 @@ fn to_io_err(e: UsbMassStorageReadWriteError) -> io::Error {
     io::Error::new(io::ErrorKind::Other, e)
 }
 
-impl IoRead for UsbBlockDevice {
+impl<'a> IoRead for UsbBlockDevice<'a> {
     fn read(&mut self, out: &mut [u8]) -> io::Result<usize> {
         if out.is_empty() {
             return Ok(0);
@@ -162,7 +163,7 @@ impl IoRead for UsbBlockDevice {
     }
 }
 
-impl IoWrite for UsbBlockDevice {
+impl<'a> IoWrite for UsbBlockDevice<'a> {
     fn write(&mut self, src: &[u8]) -> io::Result<usize> {
         if src.is_empty() {
             return Ok(0);
@@ -244,7 +245,7 @@ impl IoWrite for UsbBlockDevice {
     }
 }
 
-impl IoSeek for UsbBlockDevice {
+impl<'a> IoSeek for UsbBlockDevice<'a> {
     fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
         let disk = self.disk_size() as i128;
         let cur = self.pos as i128;
@@ -265,7 +266,7 @@ impl IoSeek for UsbBlockDevice {
     }
 }
 
-impl ReadAt for UsbBlockDevice {
+impl<'a> ReadAt for UsbBlockDevice<'a> {
     fn read_at(&self, pos: u64, buf: &mut [u8]) -> io::Result<usize> {
         self.read_at(pos, buf)
     }

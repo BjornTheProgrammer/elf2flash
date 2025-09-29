@@ -16,3 +16,4 @@ log = { workspace = true }
 bootsector = { version = "0.2" }
 thiserror = { workspace = true }
 usbh-scsi = { path = "../usbh-scsi" }
+rusb = { workspace = true }

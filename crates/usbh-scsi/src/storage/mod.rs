@@ -258,7 +258,7 @@ impl UsbMassStorage<Opened> {
         }
     }
 
-    pub fn block_device(self) -> std::io::Result<UsbBlockDevice> {
+    pub fn block_device<'a>(&'a mut self) -> std::io::Result<UsbBlockDevice<'a>> {
         UsbBlockDevice::new(self)
     }
 }

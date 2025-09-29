@@ -12,6 +12,6 @@ documentation = "https://docs.rs/usbh-scsi"
 
 [dependencies]
 log = { workspace = true }
-rusb = { version = "0.9" }
+rusb = { workspace = true }
 bootsector = { version = "0.2" }
 thiserror = { workspace = true }
