@@ -1,7 +1,17 @@
-use std::{error::Error, fs::{self, File}, io::{BufReader, BufWriter, Stdout, Write}, path::{Path, PathBuf}, sync::OnceLock};
-use elf2flash_core::{elf2uf2, ProgressReporter};
+use elf2flash_core::{
+    ProgressReporter,
+    boards::{BoardIter, UsbDevice, UsbVersion},
+    elf2uf2,
+};
 use env_logger::Env;
 use pbr::{ProgressBar, Units};
+use std::{
+    error::Error,
+    fs::{self, File},
+    io::{BufReader, BufWriter, Stdout, Write},
+    path::{Path, PathBuf},
+    sync::OnceLock,
+};
 use sysinfo::Disks;
 
 use clap::Parser;
@@ -64,7 +74,7 @@ impl Opts {
 static OPTS: OnceLock<Opts> = OnceLock::new();
 
 struct ProgressBarReporter {
-    pb: ProgressBar<Stdout>
+    pb: ProgressBar<Stdout>,
 }
 
 impl ProgressReporter for ProgressBarReporter {
@@ -85,7 +95,7 @@ impl ProgressReporter for ProgressBarReporter {
 impl ProgressBarReporter {
     pub fn new() -> Self {
         Self {
-            pb: ProgressBar::new(0)
+            pb: ProgressBar::new(0),
         }
     }
 }
@@ -95,6 +105,37 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     if Opts::global().verbose {
         env_logger::Builder::from_env(Env::default().default_filter_or("debug")).init();
+    }
+
+    #[cfg(feature = "usb")]
+    {
+        log::debug!("Searching for devices via usb...");
+        let devices = rusb::devices().unwrap();
+        let devices = devices
+            .iter()
+            .map(|device| {
+                let desc = device.device_descriptor().unwrap();
+                let version = desc.device_version();
+                UsbDevice {
+                    bus_number: device.bus_number(),
+                    address: device.address(),
+                    vendor_id: desc.vendor_id(),
+                    product_id: desc.product_id(),
+                    version: UsbVersion(version.0, version.1, version.2),
+                }
+            })
+            .collect::<Vec<_>>();
+
+        let boards = Vec::new();
+
+        for device in devices {
+            let board = match BoardIter::new().find(|board| board.is_device_board(&device)) {
+                Some(board) => board,
+                None => continue,
+            };
+
+            boards.push((device, board));
+        }
     }
 
     #[cfg(feature = "serial")]
@@ -132,7 +173,12 @@ fn main() -> Result<(), Box<dyn Error>> {
         println!("Using UF2 Family ID 0x{:x}", family_id);
     }
 
-    if let Err(err) = elf2uf2(input, BufWriter::new(output), family_id, ProgressBarReporter::new()) {
+    if let Err(err) = elf2uf2(
+        input,
+        BufWriter::new(output),
+        family_id,
+        ProgressBarReporter::new(),
+    ) {
         if Opts::global().deploy {
             fs::remove_file(deployed_path.unwrap())?;
         } else {
