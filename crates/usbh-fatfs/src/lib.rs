@@ -1,7 +1,7 @@
 use std::io::{Read, Seek, SeekFrom, Write};
 
 use fatfs::{FatType, FileSystem};
-use rusb::DeviceDescriptor;
+use rusb::{Device, DeviceDescriptor, GlobalContext};
 use thiserror::Error;
 use usbh_scsi::storage::{block_device::UsbBlockDevice, Closed, Opened, UsbMassStorage, UsbMassStorageError, UsbMassStorageReadWriteError};
 
@@ -13,7 +13,7 @@ extern crate fatfs;
 #[derive(Debug)]
 pub struct StorageUsb {
     pub inner: StorageUsbInner,
-    pub device_descriptor: Result<DeviceDescriptor, rusb::Error>
+    pub usb_device: Device<GlobalContext>,
 }
 
 #[derive(Debug)]
@@ -36,11 +36,11 @@ pub enum StorageUsbError {
 impl StorageUsb {
     pub fn list_usbs() -> Result<Vec<Self>, StorageUsbError> {
         let usbs: Vec<_> = UsbMassStorage::list()?.into_iter().map(|usb| {
-            let device_descriptor = usb.device.device_descriptor();
+            let device = usb.device.clone();
 
             Self {
                 inner: StorageUsbInner::Closed(usb),
-                device_descriptor
+                usb_device: device
             }
         }).collect();
 
