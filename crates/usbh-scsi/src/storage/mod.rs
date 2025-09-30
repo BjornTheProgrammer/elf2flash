@@ -1,3 +1,77 @@
+//! USB Mass Storage transport layer.
+//!
+//! This module provides the building blocks to enumerate, open, and
+//! communicate with USB Mass Storage devices using the Bulk-Only
+//! Transport (BOT) protocol, as defined in the USB Mass Storage Class
+//! specification.
+//!
+//! # Design
+//!
+//! - [`UsbMassStorage`] is the central abstraction. It is
+//!   parameterized by state:
+//!   - [`Closed`]: device is enumerated but not opened.
+//!   - [`Opened`]: device is claimed, transport endpoints are active,
+//!     and I/O is possible.
+//!
+//! - [`UsbMassStorage::list`] scans all connected USB devices and
+//!   filters those that expose a Mass Storage interface (class code
+//!   `0x08`). Results are returned in the `Closed` state.
+//!
+//! - A `Closed` device can be transitioned to [`Opened`] by calling
+//!   [`UsbMassStorage::open`]. This will:
+//!   - Claim the Mass Storage interface.
+//!   - Identify bulk IN/OUT endpoints.
+//!   - Prepare a [`BulkOnlyTransport`] handle.
+//!
+//! - Once `Opened`, raw bulk I/O is available via [`write`] and
+//!   [`read`]. Higher-level SCSI commands can be executed with
+//!   [`execute_command`].
+//!
+//! - For block-level abstraction, [`UsbMassStorage::block_device`]
+//!   constructs a [`UsbBlockDevice`], which implements `Read`, `Write`,
+//!   and `Seek` for random-access sector I/O.
+//!
+//! # Example
+//!
+//! ```
+//! use usbh_scsi::storage::UsbMassStorage;
+//! use usbh_scsi::commands::inquiry::InquiryCommand;
+//! use usbh_scsi::commands::cbw::Direction;
+//! use std::error::Error;
+//!
+//! fn main() -> Result<(), Box<dyn Error>> {
+//!     // Enumerate all connected MSC devices
+//!     let mut devices = UsbMassStorage::list()?;
+//!     if let Some(closed) = devices.pop() {
+//!         // Open the first one
+//!         let mut dev = closed.open()?;
+//!
+//!         // Send a SCSI INQUIRY command
+//!         let cmd = InquiryCommand::new(0);
+//!         let mut buf = [0u8; 36];
+//!         dev.execute_command(1, buf.len() as u32, Direction::In, &cmd, Some(&mut buf))?;
+//!
+//!         println!("INQUIRY data: {:?}", &buf);
+//!
+//!         // Close again when done
+//!         let _closed = dev.close();
+//!     }
+//!     Ok(())
+//! }
+//! ```
+//!
+//! # Notes
+//!
+//! - Only Bulk-Only Transport (protocol code `0x50`) is supported, if you want other transport methods, create an issue, I'll be happy to implement it.
+//! - `GET_MAX_LUN` is provided via [`UsbMassStorage::get_max_lun`],
+//!   though most devices report only `0`.
+//! - All timeouts default to 10 seconds but may be tuned via the
+//!   [`Opened`] state.
+//!
+//! [`write`]: UsbMassStorage::write
+//! [`read`]: UsbMassStorage::read
+//! [`execute_command`]: UsbMassStorage::execute_command
+
 use rusb::{ConfigDescriptor, Device, DeviceHandle, Direction, GlobalContext, TransferType};
 use thiserror::Error;
 
@@ -8,14 +82,21 @@ use crate::{
 
 pub mod block_device;
 
+/// Errors that can occur while enumerating or opening USB Mass Storage devices.
 #[derive(Error, Debug)]
 pub enum UsbMassStorageError {
+    /// Failed to retrieve device list from rusb.
     #[error("failed to get usb devices from rusb")]
     FailedToGetUsbDevices,
+    /// Failed to open a selected device.
     #[error("failed to open usb devices from rusb")]
     FailedToOpenUsbDevice,
 }
 
+/// A USB Mass Storage device, parameterized by its state (`Closed` or `Opened`).
+///
+/// - In `Closed` state, the device is enumerated but not opened.
+/// - In `Opened` state, the device is claimed and ready for I/O.
 #[derive(Debug, Clone)]
 pub struct UsbMassStorage<S = Closed> {
     pub device: Device<GlobalContext>,
@@ -23,17 +104,24 @@ pub struct UsbMassStorage<S = Closed> {
     pub extra: S,
 }
 
-pub struct BulkTransfer {}
-
+/// State for an opened USB Mass Storage device.
+///
+/// Holds the active `DeviceHandle`, transport information,
+/// and a default timeout duration.
 #[derive(Debug)]
 pub struct Opened {
     pub handle: DeviceHandle<GlobalContext>,
     pub bulk_only_transport: Option<BulkOnlyTransport>,
     pub timeout_duration: core::time::Duration,
 }
+
+/// Marker type representing a closed USB Mass Storage device.
 #[derive(Debug, Clone)]
 pub struct Closed;
 
+/// USB Bulk-Only Transport (BOT) information for a Mass Storage interface.
+///
+/// Includes endpoint addresses, max packet sizes, and interface number.
 #[derive(Debug)]
 pub struct BulkOnlyTransport {
     pub in_address: u8,
@@ -44,6 +132,11 @@ pub struct BulkOnlyTransport {
 }
 
 impl UsbMassStorage<Closed> {
+    /// Attempt to open the device and transition it into the [`Opened`] state.
+    ///
+    /// - Claims the MSC interface.
+    /// - Locates IN/OUT bulk endpoints.
+    /// - Configures the active configuration and alternate setting.
     pub fn open(self) -> Result<UsbMassStorage<Opened>, UsbMassStorageError> {
         let handle = self
             .device
@@ -137,7 +230,7 @@ impl UsbMassStorage<Closed> {
 }
 
 impl UsbMassStorage<Opened> {
-    /// Close the chanel
+    /// Close the device, releasing any claimed interfaces.
     pub fn close(self) -> UsbMassStorage<Closed> {
         UsbMassStorage::<Closed> {
             device: self.device,
@@ -146,7 +239,9 @@ impl UsbMassStorage<Opened> {
         }
     }
 
-    // Sends the bytes currently stored in a buffer over the communication channel. Returns the number of bytes sent.
+    /// Write raw bytes to the bulk OUT endpoint.
+    ///
+    /// Returns the number of bytes successfully sent.
     pub fn write<B: AsRef<[u8]>>(
         &mut self,
         bytes: B,
@@ -165,7 +260,9 @@ impl UsbMassStorage<Opened> {
         Ok(n)
     }
 
-    /// Reads bytes from the channel up to the point where the buffer is filled. Returns the number of bytes successfully read.
+    /// Read raw bytes from the bulk IN endpoint.
+    ///
+    /// Fills the provided buffer and returns the number of bytes read.
     pub fn read<B: AsMut<[u8]>>(
         &self,
         mut buffer: B,
@@ -184,6 +281,11 @@ impl UsbMassStorage<Opened> {
         Ok(n)
     }
 
+    /// Execute a SCSI command using the Bulk-Only Transport protocol.
+    ///
+    /// - Sends a Command Block Wrapper (CBW).
+    /// - Performs the data phase (if any).
+    /// - Reads and validates the Command Status Wrapper (CSW).
     pub fn execute_command<T: CommandBlock>(
         &mut self,
         tag: u32,
@@ -215,15 +317,13 @@ impl UsbMassStorage<Opened> {
         let n = self.read(&mut csw)?;
         assert_eq!(n, 13, "short CSW");
 
-        // Optional: parse and check CSW signature, status, and tag matches
         Ok(())
     }
 
-    /// Perform the GET_MAX_LUN class-specific request (§3.2 BOT spec).
+    /// Perform the `GET_MAX_LUN` class-specific request.
     ///
-    /// Returns the maximum Logical Unit Number (LUN).
-    /// - If result is `0`, the device only has LUN0.
-    /// - If the request STALLs, you should assume `0`.
+    /// Returns the highest supported Logical Unit Number.
+    /// Most devices return `0` (only LUN0).
     pub fn get_max_lun(&mut self) -> Result<u8, UsbMassStorageReadWriteError> {
         let bulk_only_transport = match self.extra.bulk_only_transport {
             Some(ref bulk) => bulk,
@@ -258,20 +358,25 @@ impl UsbMassStorage<Opened> {
         }
     }
 
+    /// Create a [`UsbBlockDevice`] abstraction for block-level I/O.
     pub fn block_device<'a>(&'a mut self) -> std::io::Result<UsbBlockDevice<'a>> {
         UsbBlockDevice::new(self)
     }
 }
 
+/// Errors that can occur during bulk I/O or SCSI execution.
 #[derive(Error, Debug)]
 pub enum UsbMassStorageReadWriteError {
+    /// No suitable transport (Bulk-Only Transport) was found for this device.
     #[error("there is no defined transportation method")]
     NoKnownTransportationMethod,
+    /// Low-level bulk transfer failed.
     #[error("bulk read error")]
     UsbDeviceBulkFailed(#[from] rusb::Error),
 }
 
 impl Drop for Opened {
+    /// Resets the handle and releases the claimed interface on drop.
     fn drop(&mut self) {
         let _ = self.handle.reset();
         if let Some(bulk_only_transport) = &self.bulk_only_transport {
@@ -283,6 +388,9 @@ impl Drop for Opened {
 }
 
 impl UsbMassStorage {
+    /// Enumerate all connected USB Mass Storage devices.
+    ///
+    /// Filters by class code `0x08` (MSC). Returns devices in the `Closed` state.
     pub fn list() -> Result<Vec<UsbMassStorage<Closed>>, UsbMassStorageError> {
         let mut devices = Vec::new();
         let rusb_devices =
@@ -320,6 +428,7 @@ impl UsbMassStorage {
     }
 }
 
+/// Extension trait to fetch a configuration descriptor by number.
 pub trait ConfigDescriptorExt {
     fn config_descriptor_by_number(&self, number: u8) -> rusb::Result<Option<ConfigDescriptor>>;
 }

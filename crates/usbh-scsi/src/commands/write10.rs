@@ -1,6 +1,12 @@
 use crate::commands::CommandBlock;
 
-/// WRITE(10) command — write contiguous blocks starting from an LBA.
+/// SCSI **WRITE(10)** command.
+///
+/// Requests the device to write one or more contiguous logical blocks
+/// (sectors) starting from the given logical block address (LBA).
+///
+/// This is the primary way to perform raw sector writes on a
+/// USB Mass Storage device.
 #[derive(Debug, Clone, Copy)]
 pub struct Write10Command {
     pub logical_block_address: u32,
@@ -9,6 +15,11 @@ pub struct Write10Command {
 }
 
 impl Write10Command {
+    /// Construct a new WRITE(10) command.
+    ///
+    /// - `logical_unit_number`: target LUN (usually 0).
+    /// - `logical_block_address`: starting sector.
+    /// - `transfer_length`: number of blocks to write.
     pub fn new(logical_unit_number: u8, logical_block_address: u32, transfer_length: u16) -> Self {
         Self {
             logical_block_address,

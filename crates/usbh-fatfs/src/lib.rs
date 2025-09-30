@@ -1,3 +1,5 @@
+#![doc = include_str!("../README.md")]
+
 use std::io::{Read, Seek, SeekFrom, Write};
 
 use fatfs::FatType;

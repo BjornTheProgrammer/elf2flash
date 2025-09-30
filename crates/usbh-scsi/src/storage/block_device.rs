@@ -1,3 +1,14 @@
+//! A std::io–compatible wrapper over an opened USB Mass Storage device.
+//!
+//! This struct abstracts away raw SCSI READ(10)/WRITE(10) commands and
+//! presents the device as a block-addressable disk. It implements the
+//! standard [`Read`], [`Write`], and [`Seek`] traits, as well as
+//! [`bootsector::pio::ReadAt`] for random access reads.
+//!
+//! This does *not* interpret any filesystem. It only exposes block-level
+//! access. Higher-level layers (such as FAT, EXT, etc.) can be built on top
+//! by treating this as a raw disk.
+
 use bootsector::pio::ReadAt;
 
 use crate::commands::{
@@ -13,8 +24,11 @@ use std::{
 
 use crate::storage::{Opened, UsbMassStorage, UsbMassStorageReadWriteError};
 
-// A std-IO-friendly wrapper over your open MSC device.
-// (separate from your FatUsb that implements fatfs traits)
+/// A block-level abstraction over a USB Mass Storage device.
+///
+/// - Queries the device with `READ CAPACITY(10)` to determine block size and total capacity.
+/// - Provides convenience methods for reading/writing whole blocks.
+/// - Implements standard `Read`, `Write`, `Seek` traits to integrate with Rust I/O ecosystem.
 #[derive(Debug)]
 pub struct UsbBlockDevice<'a> {
     usb: RefCell<&'a mut UsbMassStorage<Opened>>,
@@ -24,6 +38,9 @@ pub struct UsbBlockDevice<'a> {
 }
 
 impl<'a> UsbBlockDevice<'a> {
+    /// Create a new block device wrapper by issuing a `READ CAPACITY(10)` command.
+    ///
+    /// This determines the device’s block size and last usable LBA.
     pub fn new(usb: &'a mut UsbMassStorage<Opened>) -> io::Result<Self> {
         // Query capacity to learn block size & last LBA
         let mut buf = [0u8; 8];
@@ -45,6 +62,7 @@ impl<'a> UsbBlockDevice<'a> {
         })
     }
 
+    /// Returns the total size of the disk (in bytes).
     #[inline]
     fn disk_size(&self) -> u64 {
         (self.max_lba + 1) * self.block_size as u64
@@ -52,8 +70,9 @@ impl<'a> UsbBlockDevice<'a> {
 
     /// Write `count` consecutive blocks starting at `lba` from `buf`.
     ///
-    /// - `count` must match `buf.len() / self.block_size`.
-    /// - `buf.len()` must be exactly `count * block_size`.
+    /// Requirements:
+    /// - `count == buf.len() / block_size`
+    /// - `buf.len()` must be exactly `count * block_size`
     pub fn write_blocks(&mut self, tag: u32, lba: u32, count: u16, buf: &[u8]) -> io::Result<()> {
         let bs = self.block_size as usize;
         assert_eq!(buf.len(), bs * count as usize);
@@ -70,8 +89,9 @@ impl<'a> UsbBlockDevice<'a> {
 
     /// Read `count` consecutive blocks starting at `lba` into `buf`.
     ///
-    /// - `count` must match `buf.len() / self.block_size`.
-    /// - `buf.len()` must be exactly `count * block_size`.
+    /// Requirements:
+    /// - `count == buf.len() / block_size`
+    /// - `buf.len()` must be exactly `count * block_size`
     pub fn read_blocks(
         &mut self,
         tag: u32,
@@ -89,6 +109,10 @@ impl<'a> UsbBlockDevice<'a> {
             .map_err(to_io_err)
     }
 
+    /// Low-level helper: read arbitrary bytes starting at `pos` (absolute).
+    ///
+    /// May read full blocks into a scratch buffer and then slice the
+    /// requested range. Useful for implementing `ReadAt`.
     fn read_at(&self, pos: u64, buf: &mut [u8]) -> io::Result<usize> {
         if buf.is_empty() {
             return Ok(0);
@@ -134,6 +158,8 @@ fn to_io_err(e: UsbMassStorageReadWriteError) -> io::Error {
 }
 
 impl<'a> IoRead for UsbBlockDevice<'a> {
+    /// Reads up to `out.len()` bytes from the current cursor position,
+    /// advancing the cursor. Will not cross past the end of the disk.
     fn read(&mut self, out: &mut [u8]) -> io::Result<usize> {
         if out.is_empty() {
             return Ok(0);
@@ -164,6 +190,9 @@ impl<'a> IoRead for UsbBlockDevice<'a> {
 }
 
 impl<'a> IoWrite for UsbBlockDevice<'a> {
+    /// Writes bytes starting at the current cursor position, advancing
+    /// the cursor. May perform read-modify-write cycles when writes are
+    /// not block-aligned.
     fn write(&mut self, src: &[u8]) -> io::Result<usize> {
         if src.is_empty() {
             return Ok(0);
@@ -240,12 +269,14 @@ impl<'a> IoWrite for UsbBlockDevice<'a> {
         Ok(written)
     }
 
+    /// No-op: flush is not required for direct block I/O.
     fn flush(&mut self) -> io::Result<()> {
         Ok(())
     }
 }
 
 impl<'a> IoSeek for UsbBlockDevice<'a> {
+    /// Seeks to an absolute or relative position, clamping at disk boundaries.
     fn seek(&mut self, pos: SeekFrom) -> io::Result<u64> {
         let disk = self.disk_size() as i128;
         let cur = self.pos as i128;
@@ -267,6 +298,7 @@ impl<'a> IoSeek for UsbBlockDevice<'a> {
 }
 
 impl<'a> ReadAt for UsbBlockDevice<'a> {
+    /// Reads bytes starting at an absolute `pos` without altering the cursor.
     fn read_at(&self, pos: u64, buf: &mut [u8]) -> io::Result<usize> {
         self.read_at(pos, buf)
     }

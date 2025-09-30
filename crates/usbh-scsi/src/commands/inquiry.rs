@@ -1,10 +1,18 @@
 use crate::commands::CommandBlock;
 
+/// SCSI INQUIRY command (CDB).
+///
+/// Requests basic device identification (vendor, product, revision,
+/// and type). Typically the first command issued to discover what
+/// kind of device is attached.
 pub struct InquiryCommand {
-    pub alloc_len: u8, // how many bytes we expect in response
+    /// Allocation length: how many bytes the host expects back
+    /// in the standard INQUIRY response.
+    pub alloc_len: u8,
 }
 
 impl InquiryCommand {
+    /// Construct a new `INQUIRY` command with the given expected response size.
     pub fn new(alloc_len: u8) -> Self {
         Self { alloc_len }
     }
@@ -27,12 +35,18 @@ impl CommandBlock for InquiryCommand {
     }
 }
 
+/// SCSI Peripheral Device Type field (from byte 0 of INQUIRY data).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PeripheralDeviceType {
+    /// Direct-access block device (e.g., disk).
     SbcDirectAccessDevice, // 0x00
-    CdRomDevice,           // 0x05
-    OpticalMemoryDevice,   // 0x07
+    /// CD/DVD device.
+    CdRomDevice, // 0x05
+    /// Optical memory (e.g., MO disk).
+    OpticalMemoryDevice, // 0x07
+    /// RBC direct-access device.
     RbcDirectAccessDevice, // 0x0E
+    /// Other or unrecognized value.
     OutOfScope(u8),
 }
 
@@ -48,6 +62,10 @@ impl From<u8> for PeripheralDeviceType {
     }
 }
 
+/// Parsed standard INQUIRY response data (first 36 bytes).
+///
+/// Provides device type, removability flag, vendor/product/revision
+/// identification fields.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub struct InquiryData {
     pub peripheral_device_type: PeripheralDeviceType,
@@ -78,7 +96,9 @@ impl std::fmt::Debug for InquiryData {
 }
 
 impl InquiryData {
-    /// Parse a raw 36-byte standard INQUIRY response buffer.
+    /// Parse a standard 36-byte INQUIRY response.
+    ///
+    /// Returns `None` if the buffer is shorter than 36 bytes.
     pub fn parse(buf: &[u8]) -> Option<Self> {
         if buf.len() < 36 {
             return None;
@@ -107,19 +127,21 @@ impl InquiryData {
         })
     }
 
-    /// Convenience accessors to convert ASCII fields to `String`.
+    /// Vendor ID string (trimmed ASCII).
     pub fn vendor(&self) -> String {
         String::from_utf8_lossy(&self.vendor_identification)
             .trim()
             .to_string()
     }
 
+    /// Product ID string (trimmed ASCII).
     pub fn product(&self) -> String {
         String::from_utf8_lossy(&self.product_identification)
             .trim()
             .to_string()
     }
 
+    /// Revision string (trimmed ASCII).
     pub fn revision(&self) -> String {
         String::from_utf8_lossy(&self.product_revision_level)
             .trim()

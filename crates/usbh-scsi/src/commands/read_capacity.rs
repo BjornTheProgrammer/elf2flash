@@ -1,12 +1,23 @@
 use crate::commands::CommandBlock;
 
-/// READ CAPACITY (10) command — returns 8 bytes of capacity data
+/// SCSI **READ CAPACITY (10)** command.
+///
+/// Requests the device to report the capacity of the addressed logical unit.
+/// The response is exactly 8 bytes:
+///
+/// - Bytes 0–3: Last Logical Block Address (LBA).
+/// - Bytes 4–7: Block Length in bytes.
+///
+/// This is the standard way to discover a device’s sector size and total size
+/// in bytes, and is typically issued once after `INQUIRY`.
 #[derive(Debug, Clone, Copy)]
 pub struct ReadCapacity10Command {
+    /// Logical Unit Number (LUN). Usually `0` for single-LUN devices.
     pub logical_unit_number: u8,
 }
 
 impl ReadCapacity10Command {
+    /// Construct a new `READ CAPACITY (10)` command for a given LUN.
     pub fn new(logical_unit_number: u8) -> Self {
         Self {
             logical_unit_number,
@@ -31,13 +42,21 @@ impl CommandBlock for ReadCapacity10Command {
     }
 }
 
+/// Parsed response to a **READ CAPACITY (10)** command (8 bytes).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ReadCapacity10Data {
+    /// Address of the last logical block (zero-based).
+    ///
+    /// For example, if this is `999`, the device has 1000 blocks.
     pub last_logical_block_address: u32,
+    /// Block size in bytes (e.g. `512`).
     pub block_length_bytes: u32,
 }
 
 impl ReadCapacity10Data {
+    /// Parse the standard 8-byte READ CAPACITY (10) response buffer.
+    ///
+    /// Returns `None` if the buffer is shorter than 8 bytes.
     pub fn parse(buf: &[u8]) -> Option<Self> {
         if buf.len() < 8 {
             return None;
@@ -52,6 +71,16 @@ impl ReadCapacity10Data {
         })
     }
 
+    /// Compute the total capacity of the device in bytes.
+    ///
+    /// ```
+    /// # use usbh_scsi::commands::read_capacity::ReadCapacity10Data;
+    /// let data = ReadCapacity10Data {
+    ///     last_logical_block_address: 999,
+    ///     block_length_bytes: 512,
+    /// };
+    /// assert_eq!(data.total_capacity_bytes(), 512_000);
+    /// ```
     pub fn total_capacity_bytes(&self) -> u64 {
         (self.last_logical_block_address as u64 + 1) * self.block_length_bytes as u64
     }
