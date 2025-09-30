@@ -460,6 +460,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "list"
+version = "0.0.0"
+dependencies = [
+ "usbh-fatfs",
+]
+
+[[package]]
 name = "log"
 version = "0.4.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"

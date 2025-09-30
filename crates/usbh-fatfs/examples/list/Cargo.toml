@@ -1,0 +1,9 @@
+[package]
+name = "list"
+version = "0.0.0"
+authors = ["Bjorn Beishline"]
+edition = "2024"
+publish = false
+
+[dependencies]
+usbh-fatfs = { path = "../../../usbh-fatfs" }

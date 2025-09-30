@@ -1,7 +1,7 @@
 [workspace]
 resolver = "3"
 
-members = ["crates/*"]
+members = ["crates/*", "crates/*/examples/*"]
 default-members = ["crates/elf2flash"]
 
 [workspace.package]
