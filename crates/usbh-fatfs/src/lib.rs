@@ -3,7 +3,10 @@ use std::io::{Read, Seek, SeekFrom, Write};
 use fatfs::{FatType, FileSystem};
 use rusb::{Device, DeviceDescriptor, GlobalContext};
 use thiserror::Error;
-use usbh_scsi::storage::{block_device::UsbBlockDevice, Closed, Opened, UsbMassStorage, UsbMassStorageError, UsbMassStorageReadWriteError};
+use usbh_scsi::storage::{
+    Closed, Opened, UsbMassStorage, UsbMassStorageError, UsbMassStorageReadWriteError,
+    block_device::UsbBlockDevice,
+};
 
 pub use bootsector;
 pub use rusb;
@@ -20,7 +23,7 @@ pub struct StorageUsb {
 pub enum StorageUsbInner {
     Closed(UsbMassStorage<Closed>),
     Opened(UsbMassStorage<Opened>),
-    ClosedDummy
+    ClosedDummy,
 }
 
 #[derive(Error, Debug)]
@@ -35,14 +38,17 @@ pub enum StorageUsbError {
 
 impl StorageUsb {
     pub fn list_usbs() -> Result<Vec<Self>, StorageUsbError> {
-        let usbs: Vec<_> = UsbMassStorage::list()?.into_iter().map(|usb| {
-            let device = usb.device.clone();
+        let usbs: Vec<_> = UsbMassStorage::list()?
+            .into_iter()
+            .map(|usb| {
+                let device = usb.device.clone();
 
-            Self {
-                inner: StorageUsbInner::Closed(usb),
-                usb_device: device
-            }
-        }).collect();
+                Self {
+                    inner: StorageUsbInner::Closed(usb),
+                    usb_device: device,
+                }
+            })
+            .collect();
 
         Ok(usbs)
     }
@@ -53,7 +59,7 @@ impl StorageUsb {
         self.inner = match inner {
             StorageUsbInner::Closed(closed) => StorageUsbInner::Opened(closed.open()?),
             opened @ StorageUsbInner::Opened(_) => opened,
-            _ => unreachable!()
+            _ => unreachable!(),
         };
 
         match &mut self.inner {
@@ -71,17 +77,20 @@ pub struct FatPartition {
     pub fat_type: FatType,
     pub cluster_size: u32,
     pub first_byte: u64,
-    pub length: u64
+    pub length: u64,
 }
 
 impl FatPartition {
     pub fn list_partitions(usb: &mut StorageUsb) -> Result<Vec<Self>, StorageUsbError> {
         let opened = usb.open().unwrap();
 
-        let mut block_device = opened.block_device().map_err(|_| StorageUsbError::BlockDeviceOpenFail)?;
+        let mut block_device = opened
+            .block_device()
+            .map_err(|_| StorageUsbError::BlockDeviceOpenFail)?;
 
         let partitions =
-            bootsector::list_partitions(&block_device, &bootsector::Options::default()).map_err(|_| StorageUsbError::ListingPartitionFail)?;
+            bootsector::list_partitions(&block_device, &bootsector::Options::default())
+                .map_err(|_| StorageUsbError::ListingPartitionFail)?;
 
         let mut results = Vec::new();
 
@@ -106,7 +115,7 @@ impl FatPartition {
                 fat_type: fs.fat_type(),
                 cluster_size: fs.cluster_size(),
                 first_byte: first_byte,
-                length: length
+                length: length,
             })
         }
 
@@ -114,34 +123,33 @@ impl FatPartition {
     }
 }
 
-pub struct PartitionView<'a, 'b> {
-    pub inner: &'a mut UsbBlockDevice<'b>,
+pub struct PartitionView<D> {
+    pub inner: D,
     pub start: u64,
     pub len: u64,
 }
 
-impl<'a, 'b> PartitionView<'a, 'b> {
-    pub fn new(inner: &'a mut UsbBlockDevice<'b>, start: u64, len: u64) -> Result<Self, FatError> {
+impl<D: Seek> PartitionView<D> {
+    pub fn new(mut inner: D, start: u64, len: u64) -> Result<Self, FatError> {
         // Seek the underlying device to partition start so first reads work as expected.
         inner.seek(SeekFrom::Start(start)).map_err(FatError::from)?;
         Ok(Self { inner, start, len })
     }
 
-    fn clamp_rel(&self, rel: i128) -> u64 {
-        let len = self.len as i128;
-        rel.clamp(0, len) as u64
-    }
-
     fn current_rel_pos(&mut self) -> Result<u64, std::io::Error> {
-        let abs = self
-            .inner
-            .seek(SeekFrom::Current(0))?;
+        let abs = self.inner.seek(SeekFrom::Current(0))?;
         Ok(abs.saturating_sub(self.start))
     }
 }
 
+impl<D> PartitionView<D> {
+    fn clamp_rel(&self, rel: i128) -> u64 {
+        let len = self.len as i128;
+        rel.clamp(0, len) as u64
+    }
+}
 
-impl<'a, 'b> Read for PartitionView<'a, 'b> {
+impl<D: Read + Seek> Read for PartitionView<D> {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         if buf.is_empty() {
             return Ok(0);
@@ -160,7 +168,7 @@ impl<'a, 'b> Read for PartitionView<'a, 'b> {
     }
 }
 
-impl<'a, 'b> Write for PartitionView<'a, 'b> {
+impl<D: Write + Seek> Write for PartitionView<D> {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         if buf.is_empty() {
             return Ok(0);
@@ -185,7 +193,7 @@ impl<'a, 'b> Write for PartitionView<'a, 'b> {
     }
 }
 
-impl<'a, 'b> Seek for PartitionView<'a, 'b> {
+impl<D: Seek> Seek for PartitionView<D> {
     fn seek(&mut self, pos: SeekFrom) -> std::io::Result<u64> {
         // Compute desired RELATIVE offset within [0, len]
         let rel_target: u64 = match pos {
@@ -202,9 +210,7 @@ impl<'a, 'b> Seek for PartitionView<'a, 'b> {
 
         // Convert to absolute on the underlying device and seek.
         let abs = self.start + rel_target;
-        let _ = self
-            .inner
-            .seek(SeekFrom::Start(abs));
+        let _ = self.inner.seek(SeekFrom::Start(abs));
         Ok(rel_target)
     }
 }

@@ -20,7 +20,7 @@ impl BoardInfo for CircuitPlaygroundBluefruit {
         0xada52840
     }
 
-    fn board_name(&self) -> &'static str {
-        "CircuitPlaygroundBluefruit"
+    fn board_name(&self) -> String {
+        "circuit_playground_bluefruit".to_string()
     }
 }

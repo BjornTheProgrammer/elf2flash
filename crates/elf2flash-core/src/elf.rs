@@ -45,9 +45,6 @@ pub fn get_page_fragments<E: EndianParse>(
     page_size: u32,
 ) -> BTreeMap<u64, Vec<PageFragment>> {
     let ranges = address_ranges_from_elf(&file).unwrap();
-    for r in &ranges {
-        println!("{:?}", r);
-    }
 
     let mut pages = BTreeMap::<u64, Vec<PageFragment>>::new();
 

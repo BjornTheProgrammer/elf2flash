@@ -1,6 +1,6 @@
 use std::{
     collections::HashSet,
-    io::{Cursor, Write},
+    io::{Cursor, Read, Write},
 };
 
 use ::elf::{ElfBytes, ParseError, endian::AnyEndian};
@@ -67,7 +67,7 @@ pub enum Elf2Uf2Error {
 pub fn elf2uf2(
     input: impl AsRef<[u8]>,
     mut output: impl Write,
-    board: impl BoardInfo,
+    board: &dyn BoardInfo,
     mut reporter: impl ProgressReporter,
 ) -> Result<(), Elf2Uf2Error> {
     let input = input.as_ref();
@@ -175,7 +175,7 @@ mod tests {
         let bytes_in = &include_bytes!("../tests/rp2040/hello_usb.elf")[..];
         let mut bytes_out = Vec::new();
         let board = boards::RP2040::default();
-        elf2uf2(bytes_in, &mut bytes_out, board, NoProgress).unwrap();
+        elf2uf2(bytes_in, &mut bytes_out, &board, NoProgress).unwrap();
 
         assert_eq!(bytes_out, include_bytes!("../tests/rp2040/hello_usb.uf2"));
     }
@@ -186,7 +186,7 @@ mod tests {
         let bytes_in = &include_bytes!("../tests/rp2040/hello_serial.elf")[..];
         let mut bytes_out = Vec::new();
         let board = boards::RP2040::default();
-        elf2uf2(bytes_in, &mut bytes_out, board, NoProgress).unwrap();
+        elf2uf2(bytes_in, &mut bytes_out, &board, NoProgress).unwrap();
 
         assert_eq!(
             bytes_out,

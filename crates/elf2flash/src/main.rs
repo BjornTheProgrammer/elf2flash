@@ -1,20 +1,25 @@
 use elf2flash_core::{
     ProgressReporter,
-    boards::{BoardIter, UsbDevice, UsbVersion},
+    boards::{BoardIter, CustomBoard, CustomBoardBuilder, UsbDevice, UsbVersion},
     elf2uf2,
 };
 use env_logger::Env;
+use log::Level;
 use pbr::{ProgressBar, Units};
 use std::{
     error::Error,
     fs::{self, File},
-    io::{BufReader, BufWriter, Stdout, Write},
+    io::{BufReader, BufWriter, Read, Stdout, Write},
     path::{Path, PathBuf},
     sync::OnceLock,
 };
 use sysinfo::Disks;
 
 use clap::Parser;
+
+use crate::deploy_usb::{deploy_to_usb, get_plugged_in_boards, list_uf2_partitions};
+
+pub mod deploy_usb;
 
 #[derive(Parser, Debug, Default)]
 #[clap(version, about, long_about = None, author = "Bjorn Beishline")]
@@ -41,11 +46,31 @@ struct Opts {
     #[clap(short, long, value_parser = num_parser)]
     family: Option<u32>,
 
+    /// How many sectors that should be erasaed
+    #[clap(short = 'e', long, value_parser = num_parser)]
+    flash_sector_erase_size: Option<u64>,
+
+    /// Page size of the uf2 device
+    #[clap(short, long, value_parser = num_parser)]
+    page_size: Option<u32>,
+
+    /// Explicitly select board (rp2040, rp2350, circuit_playground_bluefruit, etc.)
+    #[clap(short, long, value_parser = board_parser)]
+    board: Option<String>,
+
     /// Input file
     input: String,
 
     /// Output file
     output: Option<String>,
+}
+
+fn board_parser(s: &str) -> Result<String, String> {
+    if let Some(board) = BoardIter::find_by_name(s) {
+        Ok(board.board_name().to_string())
+    } else {
+        Err(format!("Unknown board '{}'", s))
+    }
 }
 
 // allow user to pass hex formatted numbers (typically the format used by family ids)
@@ -103,92 +128,100 @@ impl ProgressBarReporter {
 fn main() -> Result<(), Box<dyn Error>> {
     OPTS.set(Opts::parse()).unwrap();
 
-    if Opts::global().verbose {
-        env_logger::Builder::from_env(Env::default().default_filter_or("debug")).init();
-    }
+    let options = Opts::global();
 
-    #[cfg(feature = "usb")]
-    {
-        log::debug!("Searching for devices via usb...");
-        let devices = rusb::devices().unwrap();
-        let devices = devices
-            .iter()
-            .map(|device| {
-                let desc = device.device_descriptor().unwrap();
-                let version = desc.device_version();
-                UsbDevice {
-                    bus_number: device.bus_number(),
-                    address: device.address(),
-                    vendor_id: desc.vendor_id(),
-                    product_id: desc.product_id(),
-                    version: UsbVersion(version.0, version.1, version.2),
+    if options.verbose {
+        env_logger::Builder::from_env(Env::default().default_filter_or("debug")).init();
+    } else {
+        env_logger::Builder::from_env(Env::default().default_filter_or("info"))
+            .format(|buf, record| {
+                let level = record.level();
+                if level == Level::Info {
+                    writeln!(buf, "{}", record.args())
+                } else {
+                    writeln!(buf, "{}: {}", record.level(), record.args())
                 }
             })
-            .collect::<Vec<_>>();
-
-        let boards = Vec::new();
-
-        for device in devices {
-            let board = match BoardIter::new().find(|board| board.is_device_board(&device)) {
-                Some(board) => board,
-                None => continue,
-            };
-
-            boards.push((device, board));
-        }
+            .init();
     }
 
     #[cfg(feature = "serial")]
     let serial_ports_before = serialport::available_ports()?;
 
-    let mut deployed_path = None;
-    let input = BufReader::new(File::open(&Opts::global().input)?);
+    let input = &options.input;
+    log::info!("Getting input file from {:?}", input);
 
-    let output = if Opts::global().deploy {
-        let disks = Disks::new_with_refreshed_list();
+    let mut input = File::open(input)?;
+    let mut buf = Vec::new();
+    input.read_to_end(&mut buf)?;
+    let input = buf;
 
-        let mut pico_drive = None;
-        for disk in &disks {
-            let mount = disk.mount_point();
+    log::info!("Getting plugged in boards");
 
-            if mount.join("INFO_UF2.TXT").is_file() {
-                println!("Found pico uf2 disk {}", &mount.to_string_lossy());
-                pico_drive = Some(mount.to_owned());
-                break;
-            }
-        }
+    let plugged_in_boards = get_plugged_in_boards()?;
 
-        if let Some(pico_drive) = pico_drive {
-            deployed_path = Some(pico_drive.join("out.uf2"));
-            File::create(deployed_path.as_ref().unwrap())?
-        } else {
-            return Err("Unable to find mounted pico".into());
-        }
+    if plugged_in_boards.is_empty() {
+        log::info!("No recognized board plugged in");
+        log::info!("Defaulting to search any fatfs system");
     } else {
-        File::create(Opts::global().output_path())?
-    };
-
-    let family_id = Opts::global().family;
-    if let Some(family_id) = family_id {
-        println!("Using UF2 Family ID 0x{:x}", family_id);
-    }
-
-    if let Err(err) = elf2uf2(
-        input,
-        BufWriter::new(output),
-        family_id,
-        ProgressBarReporter::new(),
-    ) {
-        if Opts::global().deploy {
-            fs::remove_file(deployed_path.unwrap())?;
-        } else {
-            fs::remove_file(Opts::global().output_path())?;
+        log::info!("Found board(s):");
+        for board in &plugged_in_boards {
+            let board = board.1.as_ref();
+            log::info!(
+                "    board: {} (family id: {:#x})",
+                board.board_name(),
+                board.family_id(),
+            )
         }
-        return Err(err);
     }
 
-    // New line after progress bar
-    println!();
+    for board in plugged_in_boards {
+        let (_usb, board, mut storage_usb) = board;
+        let partitions = list_uf2_partitions(board.as_ref(), &mut storage_usb).unwrap();
+
+        let mut output = Vec::new();
+
+        let options = Opts::global();
+
+        let mut custom_board = CustomBoardBuilder::new()
+            .board_name(board.board_name())
+            .family_id(options.family.unwrap_or(board.family_id()))
+            .flash_sector_erase_size(
+                options
+                    .flash_sector_erase_size
+                    .unwrap_or(board.flash_sector_erase_size()),
+            )
+            .page_size(options.page_size.unwrap_or(board.page_size()));
+
+        if let Some(family_id) = Opts::global().family {
+            custom_board = custom_board.family_id(family_id);
+        }
+
+        let custom_board = custom_board.build().unwrap();
+
+        log::info!("Converting elf to uf2 file");
+
+        elf2uf2(
+            &input,
+            &mut output,
+            &custom_board,
+            ProgressBarReporter::new(),
+        )?;
+
+        // New line after progress bar
+        println!();
+
+        for partition in partitions {
+            deploy_to_usb(
+                &output,
+                &partition,
+                &custom_board,
+                &mut storage_usb,
+                ProgressBarReporter::new(),
+            )
+            .unwrap();
+        }
+    }
 
     #[cfg(feature = "serial")]
     if Opts::global().serial {

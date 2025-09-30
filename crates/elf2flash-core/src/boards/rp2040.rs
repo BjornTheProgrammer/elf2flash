@@ -18,7 +18,7 @@ impl BoardInfo for RP2040 {
         0xe48bff56
     }
 
-    fn board_name(&self) -> &'static str {
-        "RP2040"
+    fn board_name(&self) -> String {
+        "rp2040".to_string()
     }
 }
