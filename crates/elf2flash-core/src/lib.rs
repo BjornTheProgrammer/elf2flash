@@ -62,7 +62,7 @@ pub enum Elf2Uf2Error {
 /// let bytes_in = &include_bytes!("../tests/rp2040/hello_usb.elf")[..];
 /// let mut bytes_out = Vec::new();
 /// let board = boards::RP2040::default();
-/// elf2uf2(bytes_in, &mut bytes_out, board, NoProgress).unwrap();
+/// elf2uf2(bytes_in, &mut bytes_out, &board, NoProgress).unwrap();
 /// ```
 pub fn elf2uf2(
     input: impl AsRef<[u8]>,
