@@ -12,22 +12,16 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Install dependencies
-      run: sudo apt-get update && sudo apt-get install -y libudev-dev
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y libudev-dev
 
-    - name: Build elf2flash
-      run: cargo build -p elf2flash --verbose
-    - name: Test elf2flash
-      run: cargo test -p elf2flash --verbose
+      - name: Build workspace
+        run: cargo build --workspace
 
-    - name: Build elf2flash-core
-      run: cargo build -p elf2flash-core --verbose
-    - name: Test elf2flash-core
-      run: cargo test -p elf2flash-core --verbose
+      - name: Test workspace
+        run: cargo test --workspace
 
-    - name: Publish elf2flash-core to crates.io
-      run: cargo publish -p elf2flash-core --token ${{ secrets.CRATES_IO_API_TOKEN }}
-    - name: Publish elf2flash to crates.io
-      run: cargo publish -p elf2flash --token ${{ secrets.CRATES_IO_API_TOKEN }}
+      - name: Publish workspace to crates.io
+        run: cargo publish --workspace --token ${{ secrets.CRATES_IO_API_TOKEN }}

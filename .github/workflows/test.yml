@@ -2,9 +2,9 @@ name: test
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
 
 env:
   CARGO_TERM_COLOR: always
@@ -13,17 +13,13 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Install dependencies
-      run: sudo apt-get update && sudo apt-get install -y libudev-dev
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y libudev-dev
 
-    - name: Build elf2flash
-      run: cargo build -p elf2flash --verbose
-    - name: Test elf2flash
-      run: cargo test -p elf2flash --verbose
+      - name: Build workspace
+        run: cargo build --workspace
 
-    - name: Build elf2flash-core
-      run: cargo build -p elf2flash-core --verbose
-    - name: Test elf2flash-core
-      run: cargo test -p elf2flash-core --verbose
+      - name: Test workspace
+        run: cargo test --workspace
