@@ -1,11 +1,10 @@
 use std::io::{Read, Seek, SeekFrom, Write};
 
-use fatfs::{FatType, FileSystem};
-use rusb::{Device, DeviceDescriptor, GlobalContext};
+use fatfs::FatType;
+use rusb::{Device, GlobalContext};
 use thiserror::Error;
 use usbh_scsi::storage::{
     Closed, Opened, UsbMassStorage, UsbMassStorageError, UsbMassStorageReadWriteError,
-    block_device::UsbBlockDevice,
 };
 
 pub use bootsector;

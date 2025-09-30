@@ -15,5 +15,5 @@ fatfs = { version = "0.3" }
 log = { workspace = true }
 bootsector = { version = "0.2" }
 thiserror = { workspace = true }
-usbh-scsi = { path = "../usbh-scsi" }
+usbh-scsi = { version = "0.1.0", path = "../usbh-scsi" }
 rusb = { workspace = true }

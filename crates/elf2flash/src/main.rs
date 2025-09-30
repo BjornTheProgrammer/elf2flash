@@ -1,6 +1,6 @@
 use elf2flash_core::{
     ProgressReporter,
-    boards::{BoardIter, CustomBoard, CustomBoardBuilder, UsbDevice, UsbVersion},
+    boards::{BoardIter, CustomBoardBuilder},
     elf2uf2,
 };
 use env_logger::Env;
@@ -8,12 +8,9 @@ use log::Level;
 use pbr::{ProgressBar, Units};
 use std::{
     error::Error,
-    fs::{self, File},
-    io::{BufReader, BufWriter, Read, Stdout, Write},
-    path::{Path, PathBuf},
-    sync::OnceLock,
+    fs::File,
+    io::{Read, Stdout, Write},
 };
-use sysinfo::Disks;
 
 use clap::Parser;
 
@@ -33,12 +30,10 @@ struct Opts {
     deploy: bool,
 
     /// Connect to serial after deploy
-    #[cfg(feature = "serial")]
     #[clap(short, long)]
     serial: bool,
 
     /// Send termination message (b"elf2flash-term\r\n") to the device on ctrl+c
-    #[cfg(feature = "serial")]
     #[clap(short, long)]
     term: bool,
 
@@ -82,22 +77,6 @@ fn num_parser(s: &str) -> Result<u32, &'static str> {
     }
 }
 
-impl Opts {
-    fn output_path(&self) -> PathBuf {
-        if let Some(output) = &self.output {
-            Path::new(output).with_extension("uf2")
-        } else {
-            Path::new(&self.input).with_extension("uf2")
-        }
-    }
-
-    fn global() -> &'static Opts {
-        OPTS.get().expect("Opts is not initialized")
-    }
-}
-
-static OPTS: OnceLock<Opts> = OnceLock::new();
-
 struct ProgressBarReporter {
     pb: ProgressBar<Stdout>,
 }
@@ -126,9 +105,7 @@ impl ProgressBarReporter {
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    OPTS.set(Opts::parse()).unwrap();
-
-    let options = Opts::global();
+    let options = Opts::parse();
 
     if options.verbose {
         env_logger::Builder::from_env(Env::default().default_filter_or("debug")).init();
@@ -145,7 +122,6 @@ fn main() -> Result<(), Box<dyn Error>> {
             .init();
     }
 
-    #[cfg(feature = "serial")]
     let serial_ports_before = serialport::available_ports()?;
 
     let input = &options.input;
@@ -181,8 +157,6 @@ fn main() -> Result<(), Box<dyn Error>> {
 
         let mut output = Vec::new();
 
-        let options = Opts::global();
-
         let mut custom_board = CustomBoardBuilder::new()
             .board_name(board.board_name())
             .family_id(options.family.unwrap_or(board.family_id()))
@@ -193,7 +167,7 @@ fn main() -> Result<(), Box<dyn Error>> {
             )
             .page_size(options.page_size.unwrap_or(board.page_size()));
 
-        if let Some(family_id) = Opts::global().family {
+        if let Some(family_id) = options.family {
             custom_board = custom_board.family_id(family_id);
         }
 
@@ -223,8 +197,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         }
     }
 
-    #[cfg(feature = "serial")]
-    if Opts::global().serial {
+    if options.serial {
         use std::process;
         use std::sync::{Arc, Mutex};
         use std::time::Duration;
@@ -270,7 +243,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                         }
                     };
 
-                    if Opts::global().term {
+                    if options.term {
                         ctrlc::set_handler(handler.clone()).expect("Error setting Ctrl-C handler");
                     }
 
@@ -295,7 +268,7 @@ fn main() -> Result<(), Box<dyn Error>> {
                                 }
                                 Err(ref e) if e.kind() == io::ErrorKind::TimedOut => (),
                                 Err(e) if e.kind() == io::ErrorKind::Interrupted => {
-                                    if Opts::global().term {
+                                    if options.term {
                                         handler();
                                     }
                                     return Err(e.into());

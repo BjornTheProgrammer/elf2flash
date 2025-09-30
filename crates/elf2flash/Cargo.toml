@@ -11,24 +11,15 @@ keywords = ["rp2040", "pico", "elf2uf2", "elf2uf2-rs", "rp2350"]
 documentation = "https://docs.rs/elf2flash"
 
 [dependencies]
-elf2flash-core = { version = "0.0.2", path = "../elf2flash-core" }
-usbh-scsi = { version = "0.0.2", path = "../usbh-scsi" }
+elf2flash-core = { version = "0.1.0", path = "../elf2flash-core" }
+usbh-fatfs = { version = "0.1.0", path = "../usbh-fatfs" }
+
+log = { workspace = true }
+
 clap = { version = "4", features = ["derive"] }
 pbr = "1"
-serialport = { version = "4", optional = true }
+serialport = { version = "4" }
 ctrlc = "3.4"
-sysinfo = "0.32"
-log = { workspace = true }
 env_logger = "0.11"
-rusb = { version = "0.9", optional = true }
 anyhow = "1.0"
-thiserror = { workspace = true }
-gpt = "4.1.0"
-bootsector = "0.2"
-usbh-fatfs = { path = "../usbh-fatfs" }
 fatfs = { version = "0.3" }
-
-[features]
-default = ["serial", "usb"]
-serial = ["serialport"]
-usb = ["rusb"]

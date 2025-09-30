@@ -1,6 +1,6 @@
 use std::{
     collections::HashSet,
-    io::{Cursor, Read, Write},
+    io::{Cursor, Write},
 };
 
 use ::elf::{ElfBytes, ParseError, endian::AnyEndian};
