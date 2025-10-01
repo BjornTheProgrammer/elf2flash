@@ -91,6 +91,9 @@ pub enum UsbMassStorageError {
     /// Failed to open a selected device.
     #[error("failed to open usb devices from rusb")]
     FailedToOpenUsbDevice,
+    /// Failed to claim interface.
+    #[error("failed to claim interface for usb devices from rusb `{0}`")]
+    FailedToClaimInterfaceFromUsbDevice(rusb::Error),
 }
 
 /// A USB Mass Storage device, parameterized by its state (`Closed` or `Opened`).
@@ -138,10 +141,21 @@ impl UsbMassStorage<Closed> {
     /// - Locates IN/OUT bulk endpoints.
     /// - Configures the active configuration and alternate setting.
     pub fn open(self) -> Result<UsbMassStorage<Opened>, UsbMassStorageError> {
-        let handle = self
+        let handle = match self
             .device
-            .open()
-            .map_err(|_| UsbMassStorageError::FailedToOpenUsbDevice)?;
+            .open() {
+                Ok(val) => val,
+                Err(err) => {
+                    match err {
+                        rusb::Error::Access => {
+                            log::error!("Insufficient permissions to open usb device");
+                        },
+                         _ => (),
+                    }
+
+                    return Err(UsbMassStorageError::FailedToOpenUsbDevice)
+                },
+            };
 
         handle.set_auto_detach_kernel_driver(true).ok();
 
@@ -206,9 +220,19 @@ impl UsbMassStorage<Closed> {
         }
 
         if let Some(bulk_only_transport) = &bulk_only_transport {
-            handle
-                .claim_interface(bulk_only_transport.interface_number)
-                .ok();
+            match handle
+                .claim_interface(bulk_only_transport.interface_number) {
+                    Ok(_) => (),
+                    Err(err) => {
+                        if err == rusb::Error::NotSupported {
+                            log::error!("Interface not supported on device. If using windows, installing a usb driver, like Zadig (https://zadig.akeo.ie/), will likely solve the issue.");
+                            return Err(UsbMassStorageError::FailedToClaimInterfaceFromUsbDevice(rusb::Error::NotSupported))
+                        } else {
+                            return Err(UsbMassStorageError::FailedToClaimInterfaceFromUsbDevice(err))
+                        }
+                    },
+                }
+                
             handle
                 .set_alternate_setting(bulk_only_transport.interface_number, 0)
                 .ok();
