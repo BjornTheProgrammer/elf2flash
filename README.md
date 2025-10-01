@@ -9,33 +9,44 @@ cargo install elf2flash
 ## Options
 
 ```
-Usage: elf2flash [OPTIONS] <INPUT> [OUTPUT]
+Usage: elf2flash [OPTIONS] [COMMAND]
 
-Arguments:
-  <INPUT>   Input file
-  [OUTPUT]  Output file
+Commands:
+  convert  Convert ELF to UF2 file on disk
+  deploy   Deploy ELF directly to a connected board
+  help     Print this message or the help of the given subcommand(s)
 
 Options:
-  -v, --verbose
-          Verbose
-  -d, --deploy
-          Deploy to any connected uf2 microcontroller
+  -v, --verbose <VERBOSE>  Set the logging verbosity [default: info] [possible values: off, error, warn, info, debug, trace]
+  -h, --help               Print help
+  -V, --version            Print version
+```
+
+### Deploying
+
+```
+Usage: elf2flash deploy [OPTIONS] <INPUT>
+
+Arguments:
+  <INPUT>  Input ELF file
+
+Options:
+  -b, --board <BOARD>
+          Same options as convert…
+  -v, --verbose <VERBOSE>
+          Set the logging verbosity [default: info] [possible values: off, error, warn, info, debug, trace]
+  -f, --family <FAMILY>
+          Override family ID
+  -e, --flash-sector-erase-size <FLASH_SECTOR_ERASE_SIZE>
+          Flash erase sector size
+  -p, --page-size <PAGE_SIZE>
+          Page size
   -s, --serial
           Connect to serial after deploy
   -t, --term
-          Send termination message (b"elf2flash-term\r\n") to the device on ctrl+c
-  -f, --family <FAMILY>
-          Select family ID for UF2. See https://github.com/microsoft/uf2/blob/master/utils/uf2families.json for list
-  -e, --flash-sector-erase-size <FLASH_SECTOR_ERASE_SIZE>
-          How many sectors that should be erasaed
-  -p, --page-size <PAGE_SIZE>
-          Page size of the uf2 device
-  -b, --board <BOARD>
-          Explicitly select board (rp2040, rp2350, circuit_playground_bluefruit, etc.)
+          Send termination message on Ctrl+C
   -h, --help
           Print help
-  -V, --version
-          Print version
 ```
 
 Family IDs can be referenced from [uf2families.json](https://github.com/microsoft/uf2/blob/master/utils/uf2families.json).
@@ -47,7 +58,7 @@ To make your Rust project automatically flash the microcontroller whenever you r
 
 ```toml
 [target.'cfg(all(target_arch = "arm", target_os = "none"))']
-runner = "elf2flash -d -t -s"
+runner = "elf2flash deploy -t -s"
 
 [build]
 # target = "thumbv6m-none-eabi" # Pico 1 / Cortex-M0/M0+

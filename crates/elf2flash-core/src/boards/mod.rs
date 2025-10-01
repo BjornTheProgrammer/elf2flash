@@ -82,6 +82,7 @@ pub trait BoardInfo {
 }
 
 /// A builder for the CustomBoard struct, which can be passed into the elf2uf2 function
+#[derive(Debug, Clone)]
 pub struct CustomBoardBuilder {
     vendor_id: Option<u16>,
     product_id: Option<u16>,
@@ -154,6 +155,7 @@ pub enum CustomBoardBuildError {
 }
 
 /// A struct, which can be passed into the elf2uf2 function, this can be constructed via the CustomBoardBuilder struct.
+#[derive(Debug, Clone)]
 pub struct CustomBoard {
     vendor_id: Option<u16>,
     product_id: Option<u16>,

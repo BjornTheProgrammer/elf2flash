@@ -38,6 +38,10 @@ impl Default for AddressRange {
 pub enum AddressRangesFromElfError {
     #[error("No segments in ELF")]
     NoSegments,
+    #[error("ELF contains memory contents for uninitialized memory at {0:08x}")]
+    MemoryContentsForUninitializedMemory(u64),
+    #[error("Memory segment {0:#08x}->{1:#08x} is outside of valid address range for device")]
+    MemorySegmentInvalidForDevice(u64, u64),
 }
 
 pub fn address_ranges_from_elf<E: EndianParse>(

@@ -1,16 +1,7 @@
-use elf2flash_core::{
-    ProgressReporter,
-    boards::{BoardIter, CustomBoardBuilder},
-    elf2uf2,
-};
+use elf2flash_core::boards::BoardIter;
 use env_logger::Env;
 use log::Level;
-use pbr::{ProgressBar, Units};
-use std::{
-    error::Error,
-    fs::File,
-    io::{Read, Stdout, Write},
-};
+use std::{error::Error, io::Write};
 
 use log::LevelFilter;
 
@@ -134,6 +125,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     env_logger::Builder::from_env(Env::default())
         .filter_level(LevelFilter::from(cli.verbose))
+        .target(env_logger::Target::Stdout)
         .format(|buf, record| {
             let level = record.level();
             if level == Level::Info {

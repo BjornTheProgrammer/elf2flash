@@ -154,8 +154,8 @@ impl UsbMassStorage<Closed> {
         let config = self
             .device
             .config_descriptor_by_number(self.device_config_number)
-            .unwrap()
-            .unwrap();
+            .map_err(|_| UsbMassStorageError::FailedToOpenUsbDevice)?
+            .ok_or(UsbMassStorageError::FailedToOpenUsbDevice)?;
         for interface in config.interfaces() {
             for interface_descriptor in interface.descriptors() {
                 // Check if class is not mass storage interface or not a SCSI transparent command set
@@ -208,7 +208,7 @@ impl UsbMassStorage<Closed> {
         if let Some(bulk_only_transport) = &bulk_only_transport {
             handle
                 .claim_interface(bulk_only_transport.interface_number)
-                .unwrap();
+                .ok();
             handle
                 .set_alternate_setting(bulk_only_transport.interface_number, 0)
                 .ok();

@@ -8,7 +8,7 @@ use elf2flash_core::{
 use fatfs::{FileSystem, FsOptions};
 use usbh_fatfs::{FatPartition, PartitionView, StorageUsb};
 
-pub fn get_plugged_in_boards() -> Result<Vec<(UsbDevice, Box<dyn BoardInfo>, StorageUsb)>> {
+pub fn get_plugged_in_boards() -> Result<Vec<(UsbDevice, Option<Box<dyn BoardInfo>>, StorageUsb)>> {
     let mut boards_found = Vec::new();
 
     for usb in StorageUsb::list_usbs()? {
@@ -27,7 +27,29 @@ pub fn get_plugged_in_boards() -> Result<Vec<(UsbDevice, Box<dyn BoardInfo>, Sto
         };
 
         if let Some(board) = BoardIter::new().find(|b| b.is_device_board(&usb_device)) {
-            boards_found.push((usb_device, board, usb));
+            boards_found.push((usb_device, Some(board), usb));
+        }
+    }
+
+    if boards_found.is_empty() {
+        log::warn!("No recognized boards found, falling back to generic UF2 devices");
+
+        for usb in StorageUsb::list_usbs()? {
+            let desc = match usb.usb_device.device_descriptor() {
+                Ok(d) => d,
+                Err(_) => continue,
+            };
+
+            let version = desc.device_version();
+            let usb_device = UsbDevice {
+                bus_number: usb.usb_device.bus_number(),
+                address: usb.usb_device.address(),
+                vendor_id: desc.vendor_id(),
+                product_id: desc.product_id(),
+                version: UsbVersion(version.0, version.1, version.2),
+            };
+
+            boards_found.push((usb_device, None, usb));
         }
     }
 

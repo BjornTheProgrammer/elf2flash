@@ -124,7 +124,7 @@ impl FatPartition {
     ///
     /// Returns only valid FAT partitions (others are skipped).
     pub fn list_partitions(usb: &mut StorageUsb) -> Result<Vec<Self>, StorageUsbError> {
-        let opened = usb.open().unwrap();
+        let opened = usb.open()?;
 
         let mut block_device = opened
             .block_device()

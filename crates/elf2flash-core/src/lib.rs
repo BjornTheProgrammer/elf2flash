@@ -77,7 +77,7 @@ pub fn elf2uf2(
     let flash_sector_erase_size = board.flash_sector_erase_size();
     let family_id = board.family_id();
 
-    let mut pages = get_page_fragments(&file, page_size);
+    let mut pages = get_page_fragments(&file, page_size)?;
 
     if pages.is_empty() {
         return Err(Elf2Uf2Error::InputFileNoMemoryPagesError);
