@@ -12,52 +12,91 @@ use std::{
     io::{Read, Stdout, Write},
 };
 
-use clap::Parser;
+use log::LevelFilter;
 
-use crate::deploy_usb::{deploy_to_usb, get_plugged_in_boards, list_uf2_partitions};
+use clap::{Parser, ValueEnum};
 
-pub mod deploy_usb;
+use crate::commands::{convert::convert, deploy::deploy};
 
-#[derive(Parser, Debug, Default)]
+pub mod commands;
+pub mod progress_bar;
+
+#[derive(Copy, Clone, Debug, ValueEnum)]
+enum LogLevel {
+    Off,
+    Error,
+    Warn,
+    Info,
+    Debug,
+    Trace,
+}
+
+#[derive(Parser, Debug)]
 #[clap(version, about, long_about = None, author = "Bjorn Beishline")]
-struct Opts {
-    /// Verbose
-    #[clap(short, long)]
-    verbose: bool,
+struct Cli {
+    /// Set the logging verbosity
+    #[clap(short, long, value_enum, global = true, default_value_t = LogLevel::Info)]
+    verbose: LogLevel,
 
-    /// Deploy to any connected pico
-    #[clap(short, long)]
-    deploy: bool,
+    #[clap(subcommand)]
+    command: Option<Command>,
+}
 
-    /// Connect to serial after deploy
-    #[clap(short, long)]
-    serial: bool,
+#[derive(Parser, Debug)]
+enum Command {
+    /// Convert ELF to UF2 file on disk
+    Convert {
+        /// Input ELF file
+        input: String,
 
-    /// Send termination message (b"elf2flash-term\r\n") to the device on ctrl+c
-    #[clap(short, long)]
-    term: bool,
+        /// Output UF2 file
+        output: String,
 
-    /// Select family ID for UF2. See https://github.com/microsoft/uf2/blob/master/utils/uf2families.json for list.
-    #[clap(short, long, value_parser = num_parser)]
-    family: Option<u32>,
+        /// Explicit board (rp2040, rp2350, circuit_playground_bluefruit, etc.)
+        #[clap(short, long, value_parser = board_parser)]
+        board: Option<String>,
 
-    /// How many sectors that should be erasaed
-    #[clap(short = 'e', long, value_parser = num_parser)]
-    flash_sector_erase_size: Option<u64>,
+        /// Override family ID
+        #[clap(short, long, value_parser = num_parser)]
+        family: Option<u32>,
 
-    /// Page size of the uf2 device
-    #[clap(short, long, value_parser = num_parser)]
-    page_size: Option<u32>,
+        /// Flash erase sector size
+        #[clap(short = 'e', long, value_parser = num_parser)]
+        flash_sector_erase_size: Option<u64>,
 
-    /// Explicitly select board (rp2040, rp2350, circuit_playground_bluefruit, etc.)
-    #[clap(short, long, value_parser = board_parser)]
-    board: Option<String>,
+        /// Page size
+        #[clap(short, long, value_parser = num_parser)]
+        page_size: Option<u32>,
+    },
+    /// Deploy ELF directly to a connected board
+    Deploy {
+        /// Input ELF file
+        input: String,
 
-    /// Input file
-    input: String,
+        /// Same options as convert…
+        #[clap(short, long, value_parser = board_parser)]
+        board: Option<String>,
 
-    /// Output file
-    output: Option<String>,
+        /// Override family ID
+        #[clap(short, long, value_parser = num_parser)]
+        family: Option<u32>,
+
+        /// Flash erase sector size
+        #[clap(short = 'e', long, value_parser = num_parser)]
+        flash_sector_erase_size: Option<u64>,
+
+        /// Page size
+        #[clap(short, long, value_parser = num_parser)]
+        page_size: Option<u32>,
+
+        /// Connect to serial after deploy
+        #[clap(short, long)]
+        serial: bool,
+
+        /// Send termination message on Ctrl+C
+        #[clap(short, long)]
+        term: bool,
+    },
 }
 
 fn board_parser(s: &str) -> Result<String, String> {
@@ -77,212 +116,75 @@ fn num_parser(s: &str) -> Result<u32, &'static str> {
     }
 }
 
-struct ProgressBarReporter {
-    pb: ProgressBar<Stdout>,
-}
-
-impl ProgressReporter for ProgressBarReporter {
-    fn start(&mut self, total_bytes: usize) {
-        self.pb.total = total_bytes as u64;
-        self.pb.set_units(Units::Bytes);
-    }
-
-    fn advance(&mut self, bytes: usize) {
-        self.pb.add(bytes as u64);
-    }
-
-    fn finish(&mut self) {
-        self.pb.finish();
-    }
-}
-
-impl ProgressBarReporter {
-    pub fn new() -> Self {
-        Self {
-            pb: ProgressBar::new(0),
+impl From<LogLevel> for LevelFilter {
+    fn from(level: LogLevel) -> Self {
+        match level {
+            LogLevel::Error => LevelFilter::Error,
+            LogLevel::Warn => LevelFilter::Warn,
+            LogLevel::Info => LevelFilter::Info,
+            LogLevel::Debug => LevelFilter::Debug,
+            LogLevel::Trace => LevelFilter::Trace,
+            LogLevel::Off => LevelFilter::Off,
         }
     }
 }
 
 fn main() -> Result<(), Box<dyn Error>> {
-    let options = Opts::parse();
+    let cli = Cli::parse();
 
-    if options.verbose {
-        env_logger::Builder::from_env(Env::default().default_filter_or("debug")).init();
-    } else {
-        env_logger::Builder::from_env(Env::default().default_filter_or("info"))
-            .format(|buf, record| {
-                let level = record.level();
-                if level == Level::Info {
-                    writeln!(buf, "{}", record.args())
-                } else {
-                    writeln!(buf, "{}: {}", record.level(), record.args())
-                }
-            })
-            .init();
-    }
-
-    let serial_ports_before = serialport::available_ports()?;
-
-    let input = &options.input;
-    log::info!("Getting input file from {:?}", input);
-
-    let mut input = File::open(input)?;
-    let mut buf = Vec::new();
-    input.read_to_end(&mut buf)?;
-    let input = buf;
-
-    log::info!("Getting plugged in boards");
-
-    let plugged_in_boards = get_plugged_in_boards()?;
-
-    if plugged_in_boards.is_empty() {
-        log::info!("No recognized board plugged in");
-        log::info!("Defaulting to search any fatfs system");
-    } else {
-        log::info!("Found board(s):");
-        for board in &plugged_in_boards {
-            let board = board.1.as_ref();
-            log::info!(
-                "    board: {} (family id: {:#x})",
-                board.board_name(),
-                board.family_id(),
-            )
-        }
-    }
-
-    for board in plugged_in_boards {
-        let (_usb, board, mut storage_usb) = board;
-        let partitions = list_uf2_partitions(board.as_ref(), &mut storage_usb).unwrap();
-
-        let mut output = Vec::new();
-
-        let mut custom_board = CustomBoardBuilder::new()
-            .board_name(board.board_name())
-            .family_id(options.family.unwrap_or(board.family_id()))
-            .flash_sector_erase_size(
-                options
-                    .flash_sector_erase_size
-                    .unwrap_or(board.flash_sector_erase_size()),
-            )
-            .page_size(options.page_size.unwrap_or(board.page_size()));
-
-        if let Some(family_id) = options.family {
-            custom_board = custom_board.family_id(family_id);
-        }
-
-        let custom_board = custom_board.build().unwrap();
-
-        log::info!("Converting elf to uf2 file");
-
-        elf2uf2(
-            &input,
-            &mut output,
-            &custom_board,
-            ProgressBarReporter::new(),
-        )?;
-
-        // New line after progress bar
-        println!();
-
-        for partition in partitions {
-            deploy_to_usb(
-                &output,
-                &partition,
-                &custom_board,
-                &mut storage_usb,
-                ProgressBarReporter::new(),
-            )
-            .unwrap();
-        }
-    }
-
-    if options.serial {
-        use std::process;
-        use std::sync::{Arc, Mutex};
-        use std::time::Duration;
-        use std::{io, thread};
-
-        let mut counter = 0;
-
-        println!("Looking for pico serial...");
-
-        let serial_port_info = 'find_loop: loop {
-            for port in serialport::available_ports()? {
-                if !serial_ports_before.contains(&port) {
-                    println!("Found pico serial on {}", &port.port_name);
-                    break 'find_loop Some(port);
-                }
+    env_logger::Builder::from_env(Env::default())
+        .filter_level(LevelFilter::from(cli.verbose))
+        .format(|buf, record| {
+            let level = record.level();
+            if level == Level::Info {
+                writeln!(buf, "{}", record.args())
+            } else {
+                writeln!(buf, "{}: {}", record.level(), record.args())
             }
+        })
+        .init();
 
-            counter += 1;
+    let command = match cli.command {
+        Some(command) => command,
+        None => return Ok(()),
+    };
 
-            if counter == 100 {
-                break None;
-            }
-
-            thread::sleep(Duration::from_millis(200));
-        };
-
-        if let Some(serial_port_info) = serial_port_info {
-            for _ in 0..100 {
-                if let Ok(port) = serialport::new(&serial_port_info.port_name, 115200)
-                    .timeout(Duration::from_millis(100))
-                    .flow_control(serialport::FlowControl::None)
-                    .open()
-                {
-                    let port = Arc::new(Mutex::new(port));
-
-                    let handler = {
-                        let port = port.clone();
-                        move || {
-                            let mut port = port.lock().unwrap();
-                            port.write_all(b"elf2flash-term\r\n").ok();
-                            port.flush().ok();
-                            process::exit(0);
-                        }
-                    };
-
-                    if options.term {
-                        ctrlc::set_handler(handler.clone()).expect("Error setting Ctrl-C handler");
-                    }
-
-                    let data_terminal_ready_succeeded = {
-                        let mut port = port.lock().unwrap();
-                        port.write_data_terminal_ready(true).is_ok()
-                    };
-                    if data_terminal_ready_succeeded {
-                        let mut serial_buf = [0; 1024];
-                        loop {
-                            let read = {
-                                let mut port = port.lock().unwrap();
-                                port.read(&mut serial_buf)
-                            };
-
-                            match read {
-                                Ok(t) => {
-                                    use std::io::Write;
-
-                                    io::stdout().write_all(&serial_buf[..t])?;
-                                    io::stdout().flush()?;
-                                }
-                                Err(ref e) if e.kind() == io::ErrorKind::TimedOut => (),
-                                Err(e) if e.kind() == io::ErrorKind::Interrupted => {
-                                    if options.term {
-                                        handler();
-                                    }
-                                    return Err(e.into());
-                                }
-                                Err(e) => return Err(e.into()),
-                            }
-                        }
-                    }
-                }
-
-                thread::sleep(Duration::from_millis(200));
-            }
+    match command {
+        Command::Convert {
+            input,
+            output,
+            board,
+            family,
+            flash_sector_erase_size,
+            page_size,
+        } => {
+            return Ok(convert(
+                input,
+                output,
+                board,
+                family,
+                flash_sector_erase_size,
+                page_size,
+            )?);
+        }
+        Command::Deploy {
+            input,
+            board,
+            family,
+            flash_sector_erase_size,
+            page_size,
+            serial,
+            term,
+        } => {
+            return Ok(deploy(
+                input,
+                board,
+                family,
+                flash_sector_erase_size,
+                page_size,
+                serial,
+                term,
+            )?);
         }
     }
-
-    Ok(())
 }

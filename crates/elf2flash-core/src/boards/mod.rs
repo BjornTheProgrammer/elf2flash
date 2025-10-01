@@ -151,10 +151,6 @@ impl CustomBoardBuilder {
 pub enum CustomBoardBuildError {
     #[error("family_id is required")]
     FamilyIdRequired,
-    #[error("page_size is required")]
-    PageSizeRequired,
-    #[error("flash_sector_erase_size is required")]
-    FlashSectorEraseSizeRequired,
 }
 
 /// A struct, which can be passed into the elf2uf2 function, this can be constructed via the CustomBoardBuilder struct.
