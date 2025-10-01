@@ -148,7 +148,7 @@ pub fn deploy(
 
         let mut counter = 0;
 
-        log::info!("\nLooking for microcontroller serial...");
+        log::info!("\n\nLooking for microcontroller serial...");
 
         let serial_port_info = 'find_loop: loop {
             for port in serialport::available_ports()? {

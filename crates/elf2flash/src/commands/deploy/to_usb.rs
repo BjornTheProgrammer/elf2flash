@@ -101,10 +101,24 @@ pub fn list_uf2_partitions(
             }
         };
 
-        let part_view = PartitionView {
-            inner: &mut block_device,
-            start: partition.first_byte as u64,
-            len: partition.length as u64,
+        let part_view = match PartitionView::new(
+            &mut block_device,
+            partition.first_byte,
+            partition.length,
+        ) {
+            Ok(part) => part,
+            Err(err) => {
+                log::error!(
+                    "Failed to create new parition view for board '{}' (family id {:#x}): {err:?}",
+                    board.board_name(),
+                    board.family_id()
+                );
+                bail!(
+                    "Failed to create new parition view for board '{}' (family id {:#x}): {err:?}",
+                    board.board_name(),
+                    board.family_id()
+                );
+            }
         };
 
         let fatfs = match FileSystem::new(part_view, FsOptions::new()) {
@@ -203,10 +217,24 @@ pub fn deploy_to_usb<B: AsRef<[u8]>>(
         }
     };
 
-    let part_view = PartitionView {
-        inner: &mut block_device,
-        start: partition.first_byte as u64,
-        len: partition.length as u64,
+    let part_view = match PartitionView::new(
+        &mut block_device,
+        partition.first_byte,
+        partition.length as u64,
+    ) {
+        Ok(part) => part,
+        Err(err) => {
+            log::error!(
+                "Failed to create new parition view for board '{}' (family id {:#x}): {err:?}",
+                board.board_name(),
+                board.family_id()
+            );
+            bail!(
+                "Failed to create new parition view for board '{}' (family id {:#x}): {err:?}",
+                board.board_name(),
+                board.family_id()
+            );
+        }
     };
 
     let fatfs = match FileSystem::new(part_view, FsOptions::new()) {

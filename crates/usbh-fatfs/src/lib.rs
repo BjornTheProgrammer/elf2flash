@@ -139,15 +139,14 @@ impl FatPartition {
         for partition in partitions {
             let first_byte = partition.first_byte;
             let length = partition.len;
-            let view = PartitionView {
-                inner: &mut block_device,
-                start: first_byte,
-                len: length,
-            };
+            let view = PartitionView::new(&mut block_device, first_byte, length).unwrap();
 
             let fs = match fatfs::FileSystem::new(view, fatfs::FsOptions::new()) {
                 Ok(fs) => fs,
-                Err(_) => continue,
+                Err(err) => {
+                    log::debug!("Failed to open as fatfs file system {err:#}");
+                    continue;
+                }
             };
 
             results.push(Self {
@@ -169,6 +168,7 @@ impl FatPartition {
 ///
 /// Wraps a seekable/readable/writable device and clamps all operations
 /// so they cannot escape the defined partition region.
+#[derive(Debug)]
 pub struct PartitionView<D> {
     /// The underlying device (e.g., USB block device).
     pub inner: D,
@@ -271,7 +271,7 @@ impl<D: Seek> Seek for PartitionView<D> {
 
         // Convert to absolute on the underlying device and seek.
         let abs = self.start + rel_target;
-        let _ = self.inner.seek(SeekFrom::Start(abs));
+        self.inner.seek(SeekFrom::Start(abs))?;
         Ok(rel_target)
     }
 }
