@@ -73,7 +73,7 @@ pub fn convert(
     )?;
 
     // newline after progress bar
-    println!();
+    log::info!("");
 
     log::info!("Wrote UF2 to {output:?}");
     Ok(())
