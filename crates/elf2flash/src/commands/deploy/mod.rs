@@ -31,7 +31,7 @@ pub fn deploy(
     input.read_to_end(&mut buf)?;
     let input = buf;
 
-    log::info!("Getting plugged in boards");
+    log::info!("Getting plugged in boards\n");
 
     let plugged_in_boards = get_plugged_in_boards()?;
 
@@ -52,6 +52,8 @@ pub fn deploy(
             }
         }
     }
+
+    log::info!("\n");
 
     for plugged_in_board in plugged_in_boards {
         let (_usb, plugged_in_board, mut storage_usb) = plugged_in_board;
@@ -119,10 +121,8 @@ pub fn deploy(
             ProgressBarReporter::new(),
         )?;
 
-        // New line after progress bar
-        log::info!("\n");
-
         for partition in partitions {
+            log::info!("\n");
             match deploy_to_usb(
                 &output,
                 &partition,
@@ -148,7 +148,7 @@ pub fn deploy(
 
         let mut counter = 0;
 
-        log::info!("Looking for microcontroller serial...");
+        log::info!("\nLooking for microcontroller serial...");
 
         let serial_port_info = 'find_loop: loop {
             for port in serialport::available_ports()? {

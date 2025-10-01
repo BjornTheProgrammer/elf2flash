@@ -49,6 +49,11 @@ Options:
           Print help
 ```
 
+### Deploy for any project
+```
+elf2flash deploy --board rp2040 firmware.elf
+```
+
 Family IDs can be referenced from [uf2families.json](https://github.com/microsoft/uf2/blob/master/utils/uf2families.json).
 You can pass values in decimal (`12345`), hexadecimal (`0xe48bff59`), or binary (`0b1010...`) formats.
 
@@ -75,7 +80,7 @@ You can also force a specific board using `--board rp2040` or `--board rp2350`.
 
 If you want to flash to an unsupported uf2 board, just add in the flags `--family`, `--flash-sector-erase-size`, and `--page-size`, these have resonable defaults, so if you are unsure what the value is, just don't provide it, and attempt running.
 
-If you wish to add a new deafult supported board, open a PR or an issue with the board you wish to support.
+If you wish to add a new default supported board, open a PR or an issue with the board you wish to support.
 
 If you open a PR just add a new board under `./crates/elf2flash-core/src/boards/`.
 

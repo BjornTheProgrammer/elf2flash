@@ -72,9 +72,6 @@ pub fn convert(
         ProgressBarReporter::new(),
     )?;
 
-    // newline after progress bar
-    log::info!("");
-
     log::info!("Wrote UF2 to {output:?}");
     Ok(())
 }

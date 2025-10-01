@@ -7,7 +7,6 @@ use log::debug;
 use std::{
     cmp::min,
     collections::BTreeMap,
-    error::Error,
     io::{Read, Seek, SeekFrom},
 };
 
