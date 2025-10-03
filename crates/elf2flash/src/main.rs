@@ -24,6 +24,7 @@ enum LogLevel {
 
 #[derive(Parser, Debug)]
 #[clap(version, about, long_about = None, author = "Bjorn Beishline")]
+#[command(arg_required_else_help = true)]
 struct Cli {
     /// Set the logging verbosity
     #[clap(short, long, value_enum, global = true, default_value_t = LogLevel::Info)]
