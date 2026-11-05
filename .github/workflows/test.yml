@@ -24,3 +24,13 @@ jobs:
 
       - name: Test workspace
         run: cargo test --workspace
+  nix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+
+      - name: Build
+        run: nix build .#default
